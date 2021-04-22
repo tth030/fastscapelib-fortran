@@ -17,7 +17,7 @@ module FastScapeContext
   logical, dimension(:), allocatable :: bounds_bc
   integer :: step
   integer :: nGSStreamPowerLaw, nGSMarine
-  logical :: setup_has_been_run, use_marine_dt_crit, enforce_marine_mass_cons, low_sealevel_at_shallow_sea
+  logical :: setup_has_been_run, enforce_marine_mass_cons, low_sealevel_at_shallow_sea
   double precision, target, dimension(:), allocatable :: h,u,vx,vy,length,a,erate,etot,catch,catch0,b,precip,kf,kd
   double precision, target, dimension(:), allocatable :: Sedflux, Fmix
   double precision, target, dimension(:), allocatable :: g
@@ -26,7 +26,6 @@ module FastScapeContext
   double precision, dimension(:,:), pointer, contiguous :: h2, vx2, vy2, etot2, b2
   double precision :: xl, yl, dt, kfsed, m, n, kdsed, g1, g2, p
   double precision :: sealevel, poro1, poro2, zporo1, zporo2, ratio, layer, kdsea1, kdsea2
-  double precision :: dt_crit_marine
   integer, dimension(:), allocatable :: stack, ndon, rec
   integer, dimension(:,:), allocatable :: don
   integer, dimension(:), allocatable :: rock_type ! 1 is basement, 2 is cont. sed, 3 is marine sed.
@@ -60,8 +59,6 @@ module FastScapeContext
     timeStrati = 0.
     timeMarine = 0.
     timeUplift = 0.
-    use_marine_dt_crit = .false.
-    dt_crit_marine = 1.d0
     enforce_marine_mass_cons = .false.
     low_sealevel_at_shallow_sea = .false.
 
@@ -879,20 +876,6 @@ module FastScapeContext
 
     end subroutine compute_fluxes
 
-    !---------------------------------------------------------------
-
-    subroutine SetUseMarineDTCrit (dt_crit_marinep)
-
-    double precision, intent(in) :: dt_crit_marinep
-
-    use_marine_dt_crit = .true.
-    if (dt_crit_marinep <= 0.d0) use_marine_dt_crit = .false.
-
-    dt_crit_marine = dt_crit_marinep
-
-    return
-
-    end subroutine SetUseMarineDTCrit
     !---------------------------------------------------------------
 
     subroutine Copydh (dhp)

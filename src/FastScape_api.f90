@@ -1035,22 +1035,6 @@ end subroutine FastScape_Set_Cumulative_Erosion
 
 !--------------------------------------------------------------------------
 
-subroutine FastScape_Set_And_Use_Marine_dt_Crit (dt_crit_marinep)
-
-use FastScapeContext
-
-implicit none
-
-double precision, intent(in) :: dt_crit_marinep
-
-call SetUseMarineDTCrit (dt_crit_marinep)
-
-return
-
-end subroutine FastScape_Set_And_Use_Marine_dt_Crit
-
-!--------------------------------------------------------------------------
-
 subroutine FastScape_Set_Enforce_Marine_Mass_cons (enforce_marine_mass_consp)
 
 use FastScapeContext

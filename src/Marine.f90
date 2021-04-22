@@ -9,19 +9,17 @@ subroutine Marine(ierr)
 
   implicit none
 
-  double precision, dimension(:), allocatable :: flux,shelfdepth,ht,Fs,dh,dh1,dh2,Fmixt,mwater,ht_i
+  double precision, dimension(:), allocatable :: flux,shelfdepth,ht,Fs,dh,dh1,dh2,Fmixt,mwater
   double precision, dimension(:), allocatable :: dhs, dhs1, F1, F2, zi, zo
   integer, dimension(:), allocatable :: flag,mmnrec,mmstack
   integer, dimension(:,:), allocatable :: mmrec
   double precision, dimension(:,:), allocatable :: mmwrec,mmlrec
   double precision shelfslope,ratio1,ratio2,dx,dy,f_mass_cons
   integer ij,ijr,ijk,k
-  double precision dt_marine
-  integer nstep_marine,imarine
   integer, intent(inout):: ierr
 
   allocate (flux(nn),shelfdepth(nn),ht(nn),Fs(nn),dh(nn),dh1(nn),dh2(nn),Fmixt(nn),flag(nn))
-  allocate (dhs(nn),dhs1(nn),F1(nn),F2(nn),zi(nn),zo(nn),ht_i(nn))
+  allocate (dhs(nn),dhs1(nn),F1(nn),F2(nn),zi(nn),zo(nn))
 
   ! set nodes at transition between ocean and continent
   flag=0
@@ -105,7 +103,8 @@ subroutine Marine(ierr)
   ! scales flux by time step
   flux=flux/dt
 
-  ! store flux at shoreline in additional array sedflux array for visualisation purposes
+  ! store flux at shoreline in additional array for visualisation purposes,
+  ! and to compute timestepping criterion based on the maximum sediment flux at the shoreline.
   sedflux_shore = flux
 
   ! stores initial height and fraction
@@ -115,25 +114,18 @@ subroutine Marine(ierr)
   !print*,'flux',minval(flux),sum(flux)/nx/ny,maxval(flux)
   !print*,'Fmix',minval(Fmix),sum(Fmix)/nx/ny,maxval(Fmix)
 
-  ! calculate dt so that the flux is never going to exceed the active layer thickness
-  dt_marine = dt
-  nstep_marine=1
-  if (use_marine_dt_crit) call compute_dt_marine(flux,dt,dt_crit_marine,dt_marine,nstep_marine,layer,nn)
+  ! silt and sand coupling diffusion in ocean
+  call SiltSandCouplingDiffusion (h,Fmix,flux*Fs,flux*(1.d0-Fs), &
+  nx,ny,dx,dy,dt,sealevel,layer,kdsea1,kdsea2,nGSMarine,flag,bounds_ibc,ierr);FSCAPE_CHKERR(ierr)
 
-  do imarine = 1,nstep_marine
-    ht_i = h
-    Fmixt=Fmix
-    ! silt and sand coupling diffusion in ocean
-    call SiltSandCouplingDiffusion (h,Fmix,flux*Fs,flux*(1.d0-Fs), &
-    nx,ny,dx,dy,dt,sealevel,layer,kdsea1,kdsea2,nGSMarine,flag,bounds_ibc,ierr);FSCAPE_CHKERR(ierr)
-
-    ! pure silt and sand during deposition/erosion
-    dh1=((h-ht)*Fmix+layer*(Fmix-Fmixt))*(1.d0-poro1)
-    dh2=((h-ht)*(1.d0-Fmix)+layer*(Fmixt-Fmix))*(1.d0-poro2)
-  enddo
+  ! pure silt and sand during deposition/erosion
+  dh1=((h-ht)*Fmix+layer*(Fmix-Fmixt))*(1.d0-poro1)
+  dh2=((h-ht)*(1.d0-Fmix)+layer*(Fmixt-Fmix))*(1.d0-poro2)
   dh=dh1+dh2
 
-  ! compute whether
+  ! compute whether Marine diffusion was mass conserving. This might not be the case in basins
+  ! with a lot of "underwater" topgraphy and little sediment input
+  ! printing is only done if option enforce_marine_mass_cons is used.
   f_mass_cons = sum(dh)/(sum(flux/(ratio1+ratio2))*dt)
   if ((sum(flux)*dt) > 0.d0 .and. enforce_marine_mass_cons .and. f_mass_cons > 1.0d0) then
       dh = dh/f_mass_cons
@@ -145,6 +137,7 @@ subroutine Marine(ierr)
   endif
 
   ! store deposited material in dh_dep to be able to transfer this value to coupled thermo-mechanical code
+  ! where compaction can be applied if necessary.
   dh_dep = dh
 
   ! >>>>>>>> compaction starts added by Jean (Dec 2018)
@@ -193,7 +186,7 @@ subroutine Marine(ierr)
   ! update rock_type
   where (dh > 0.0d0 .and. h <= sealevel ) rock_type = 3 ! marine sed.
 
-  deallocate (flux,shelfdepth,ht,Fs,dh,dh1,dh2,Fmixt,ht_i)
+  deallocate (flux,shelfdepth,ht,Fs,dh,dh1,dh2,Fmixt)
 
   return
 
@@ -563,7 +556,9 @@ subroutine compaction (F1,F2,poro1,poro2,z1,z2,nn,dh,zi,zo)
 end subroutine compaction
 
 !-----------------------------------------------------
-! added computation of timestep for marine deposition Sebastian Wolf
+! added computation of timestep for marine deposition
+! this functionality allows to run a loop on SiltSandCouplingDiffusion,
+! so that the timestep can be maximized. This function is not used atm.
 subroutine compute_dt_marine(flux,dt,dt_crit_marine,dt_marine,nstep_marine,layer,nn)
 
 implicit none
