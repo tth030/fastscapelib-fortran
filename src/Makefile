@@ -6,7 +6,7 @@ ifneq ($(findstring geodyn,$(HOSTNAME)),)
 else
   F90 = gfortran
   CC = gcc-10
-  F90_OPTIONS = -ffree-form -ffree-line-length-none -fimplicit-none -fbounds-check -Wall -Wno-unused-dummy-argument -cpp -fall-intrinsics -fallow-argument-mismatch  # needed to remove -std=f2008 -ffree-line-length-none is required for long macros
+  F90_OPTIONS = -ffree-form -ffree-line-length-none -fimplicit-none -fbounds-check -Wall -Wno-unused-dummy-argument -cpp -fall-intrinsics -fallow-argument-mismatch -fconvert=big-endian # needed to remove -std=f2008 -ffree-line-length-none is required for long macros
 endif
 
 ON_WINDOWS = f
