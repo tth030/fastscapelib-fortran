@@ -955,13 +955,16 @@ end subroutine FastScape_Get_Fluxes
 
 !--------------------------------------------------------------------------
 
-subroutine FastScape_Copy_dh(dhp)
+subroutine FastScape_Copy_dh(dhp,ierr)
 
 use FastScapeContext
 
 implicit none
 
+integer, intent(out):: ierr
 double precision, intent(inout), dimension(*) :: dhp
+
+ierr=0
 
 call Copydh(dhp)
 
@@ -971,13 +974,16 @@ end subroutine FastScape_Copy_dh
 
 !--------------------------------------------------------------------------
 
-subroutine FastScape_Copy_RockType(rocktype)
+subroutine FastScape_Copy_RockType(rocktype,ierr)
 
 use FastScapeContext
 
 implicit none
 
+integer, intent(out):: ierr
 integer, intent(inout), dimension(*) :: rocktype
+
+ierr=0
 
 call CopyRockType(rocktype)
 
@@ -987,13 +993,16 @@ end subroutine FastScape_Copy_RockType
 
 !--------------------------------------------------------------------------
 
-subroutine FastScape_Set_RockType(rocktype)
+subroutine FastScape_Set_RockType(rocktype,ierr)
 
 use FastScapeContext
 
 implicit none
 
+integer, intent(out):: ierr
 integer, intent(in), dimension(*) :: rocktype
+
+ierr=0
 
 call SetRockType(rocktype)
 
@@ -1003,13 +1012,16 @@ end subroutine FastScape_Set_RockType
 
 !--------------------------------------------------------------------------
 
-subroutine FastScape_Copy_Sediment_Flux_Shoreline(sedfluxshorep)
+subroutine FastScape_Copy_Sediment_Flux_Shoreline(sedfluxshorep,ierr)
 
 use FastScapeContext
 
 implicit none
 
+integer, intent(out):: ierr
 double precision, intent(inout), dimension(*) :: sedfluxshorep
+
+ierr=0
 
 call CopySedimentFluxShore(sedfluxshorep)
 
@@ -1019,13 +1031,16 @@ end subroutine FastScape_Copy_Sediment_Flux_Shoreline
 
 !--------------------------------------------------------------------------
 
-subroutine FastScape_Set_Cumulative_Erosion (etotp)
+subroutine FastScape_Set_Cumulative_Erosion (etotp,ierr)
 
 use FastScapeContext
 
 implicit none
 
+integer, intent(out):: ierr
 double precision, intent(in) :: etotp(*)
+
+ierr=0
 
 call SetCumulativeErosion (etotp)
 
@@ -1035,13 +1050,16 @@ end subroutine FastScape_Set_Cumulative_Erosion
 
 !--------------------------------------------------------------------------
 
-subroutine FastScape_Set_Enforce_Marine_Mass_cons (enforce_marine_mass_consp)
+subroutine FastScape_Set_Enforce_Marine_Mass_cons (enforce_marine_mass_consp,ierr)
 
 use FastScapeContext
 
 implicit none
 
+integer, intent(out):: ierr
 logical, intent(in) :: enforce_marine_mass_consp
+
+ierr=0
 
 call SetEnforceMarineMassCons (enforce_marine_mass_consp)
 
@@ -1051,13 +1069,16 @@ end subroutine FastScape_Set_Enforce_Marine_Mass_cons
 
 !--------------------------------------------------------------------------
 
-subroutine FastScape_Set_Correct_Shallow_Sealevel (low_sealevel_at_shallow_seap)
+subroutine FastScape_Set_Correct_Shallow_Sealevel (low_sealevel_at_shallow_seap,ierr)
 
 use FastScapeContext
 
 implicit none
 
+integer, intent(out):: ierr
 logical, intent(in) :: low_sealevel_at_shallow_seap
+
+ierr=0
 
 call SetCorrectShallowSealevel (low_sealevel_at_shallow_seap)
 
@@ -1067,13 +1088,16 @@ end subroutine FastScape_Set_Correct_Shallow_Sealevel
 
 !--------------------------------------------------------------------------
 
-subroutine FastScape_Set_Sealevel (sealevelp)
+subroutine FastScape_Set_Sealevel (sealevelp,ierr)
 
 use FastScapeContext
 
 implicit none
 
+integer, intent(out):: ierr
 double precision, intent(in) :: sealevelp
+
+ierr=0
 
 call SetSealevel (sealevelp)
 
@@ -1082,13 +1106,16 @@ return
 end subroutine FastScape_Set_Sealevel
 
 !--------------------------------------------------------------------------
-subroutine FastScape_Set_Tolerance_SPL (atol_SPLp)
+subroutine FastScape_Set_Tolerance_SPL (atol_SPLp,ierr)
 
 use FastScapeContext
 
 implicit none
 
+integer, intent(out):: ierr
 double precision, intent(in) :: atol_SPLp
+
+ierr=0
 
 call SetAtolSPL (atol_SPLp)
 
