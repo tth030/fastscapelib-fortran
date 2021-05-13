@@ -286,7 +286,11 @@ subroutine FastScape_Execute_Step(ierr)
 
   if (runMarine) then
      call cpu_time (time_in)
-     call Marine (ierr);FSCAPE_CHKERR(ierr)
+     if (.not. use_marine_aggradation) then
+       call Marine (ierr);FSCAPE_CHKERR(ierr)
+     else
+       call MarineAggradation(ierr);FSCAPE_CHKERR(ierr)
+     end if
      call cpu_time (time_out)
      timeMarine = timeMarine + time_out-time_in
   endif
@@ -1122,3 +1126,41 @@ call SetAtolSPL (atol_SPLp)
 return
 
 end subroutine FastScape_Set_Tolerance_SPL
+
+!--------------------------------------------------------------------------
+
+subroutine FastScape_Use_Marine_Aggradation (use_marine_aggp,ierr)
+
+use FastScapeContext
+
+implicit none
+
+integer, intent(out):: ierr
+logical, intent(in) :: use_marine_aggp
+
+ierr=0
+
+call UseMarineAggradation (use_marine_aggp)
+
+return
+
+end subroutine FastScape_Use_Marine_Aggradation
+
+!--------------------------------------------------------------------------
+
+subroutine FastScape_Set_Marine_Aggradation_rate (marine_agg_ratep,ierr)
+
+use FastScapeContext
+
+implicit none
+
+integer, intent(out):: ierr
+double precision, intent(in) :: marine_agg_ratep
+
+ierr=0
+
+call SetMarineAggradationRate (marine_agg_ratep)
+
+return
+
+end subroutine FastScape_Set_Marine_Aggradation_rate

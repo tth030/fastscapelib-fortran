@@ -17,7 +17,7 @@ module FastScapeContext
   logical, dimension(:), allocatable :: bounds_bc
   integer :: step
   integer :: nGSStreamPowerLaw, nGSMarine
-  logical :: setup_has_been_run, enforce_marine_mass_cons, low_sealevel_at_shallow_sea
+  logical :: setup_has_been_run, enforce_marine_mass_cons, low_sealevel_at_shallow_sea, use_marine_aggradation
   double precision, target, dimension(:), allocatable :: h,u,vx,vy,length,a,erate,etot,catch,catch0,b,precip,kf,kd
   double precision, target, dimension(:), allocatable :: Sedflux, Fmix
   double precision, target, dimension(:), allocatable :: g
@@ -41,7 +41,7 @@ module FastScapeContext
   integer, dimension(:,:), allocatable :: mrec
   double precision, dimension(:,:), allocatable :: mwrec,mlrec
   double precision :: atol_SPL
-
+  double precision :: marine_aggradation_rate
 
 
   contains
@@ -59,8 +59,6 @@ module FastScapeContext
     timeStrati = 0.
     timeMarine = 0.
     timeUplift = 0.
-    enforce_marine_mass_cons = .false.
-    low_sealevel_at_shallow_sea = .false.
 
   end subroutine Init
 
@@ -115,12 +113,18 @@ module FastScapeContext
     runMarine = .false.
     runUplift = .false.
 
+    enforce_marine_mass_cons = .false.
+    low_sealevel_at_shallow_sea = .false.
+    use_marine_aggradation = .false.
+
     nGSStreamPowerLaw = 0
     nGSMarine = 0
 
     setup_has_been_run = .true.
 
     atol_SPL = -1.d0
+
+    marine_aggradation_rate = -1.d0
 
     return
 
@@ -981,5 +985,29 @@ module FastScapeContext
     return
 
     end subroutine SetAtolSPL
+
+    !---------------------------------------------------------------
+
+    subroutine UseMarineAggradation (use_marine_aggp)
+
+    logical, intent(in) :: use_marine_aggp
+
+    use_marine_aggradation = use_marine_aggp
+
+    return
+
+    end subroutine UseMarineAggradation
+
+    !---------------------------------------------------------------
+
+    subroutine SetMarineAggradationRate (marine_agg_ratep)
+
+    double precision, intent(in) ::marine_agg_ratep
+
+    marine_aggradation_rate = marine_agg_ratep
+
+    return
+
+    end subroutine SetMarineAggradationRate
 
   end module FastScapeContext

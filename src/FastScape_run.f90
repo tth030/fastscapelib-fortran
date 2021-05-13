@@ -22,7 +22,8 @@ allocate (h(nn),b(nn),u(nn),ux(nn),uy(nn),etot(nn),erate(nn),a(nn),chi(nn),catch
 call FastScape_Init(ierr);FSCAPE_CHKERR_ABORT(ierr)
 call FastScape_Set_NX_NY (nx,ny,ierr);FSCAPE_CHKERR_ABORT(ierr)
 call FastScape_Setup(ierr);FSCAPE_CHKERR_ABORT(ierr)
-
+call FastScape_Use_Marine_Aggradation(.true.,ierr);FSCAPE_CHKERR_ABORT(ierr)
+call FastScape_Set_Marine_Aggradation_rate(0.0001d0,ierr);FSCAPE_CHKERR_ABORT(ierr)
 xl=200.d3
 yl=200.d3
 dx=xl/(nx-1)

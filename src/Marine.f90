@@ -590,3 +590,138 @@ write(*,*) 'Fastscape marine timestepping criterion used.'
 write(*,*) 'timestepping factor = ',dt_crit_marine,'computed dt used = ', dt_marine,'times ', nstep_marine
 
 end subroutine compute_dt_marine
+
+
+!-----------------------------------------------------
+! Mass conserving aggradation of marine domain with sediments arriving at the shoreline.
+subroutine MarineAggradation(ierr)
+
+use FastScapeContext
+
+implicit none
+!==============================================================================!
+double precision, dimension(:), allocatable :: flux,shelfdepth,ht,Fs,dh,Fmixt
+double precision ratio1,ratio2,dx,dy,fill_level
+integer ij,ijr,ijk,i,iter_counter
+double precision bottom,top,error,tol,vol,vol_tester
+integer, intent(inout):: ierr
+
+allocate (flux(nn),shelfdepth(nn),ht(nn),Fs(nn),dh(nn),Fmixt(nn))
+
+! arguments
+dx=xl/(nx-1)
+dy=yl/(ny-1)
+
+! computing flux from continental erosion
+flux=0.d0
+where (h.gt.sealevel) flux=Sedflux
+do ij=nn,1,-1
+  ijk=stack(ij)
+  ijr=rec(ijk)
+  if (ijr.ne.ijk.and.h(ijk).gt.sealevel) then
+    flux(ijr)=flux(ijr)+flux(ijk)
+  endif
+enddo
+! here the integral of erosion/deposition has been done
+! and distributed as flux to ocean
+where (h.gt.sealevel) flux=0.d0
+
+! set nodes at transition between ocean and continent
+!where (flux.gt.tiny(flux)) flag=1
+
+! decompact volume of pure solid phase (silt and sand) from onshore
+ratio1=ratio/(1.d0-poro1)
+ratio2=(1.d0-ratio)/(1.d0-poro2)
+! total volume of silt and sand after decompaction
+flux=flux*(ratio1+ratio2)
+
+! silt fraction (after decompaction) in shelf
+Fs=0.d0
+where (flux.gt.0.d0) Fs=ratio1/(ratio1+ratio2)
+
+! scales flux by time step
+flux=flux/dt
+
+! store flux at shoreline in additional array for visualisation purposes,
+! and to compute timestepping criterion based on the maximum sediment flux at the shoreline.
+sedflux_shore = flux
+ht  = h
+
+if (marine_aggradation_rate < 0.d0) then
+
+  vol           = sum(sedflux_shore*dt)*dx*dy
+  tol           = 1e-4*dx*dy      ! 0.1 mm on average
+  fill_level    = sealevel        ! initialise fill_level to be sealevel
+  top           = maxval(h)       ! initially top and bottom are the model max and min
+  bottom        = minval(h)
+  iter_counter  = 0
+  error         = 2*tol
+
+  while_loop: do while (abs(error) >= abs(tol))
+    iter_counter = iter_counter + 1
+    ht  = h
+
+    ! Fill the tester to fill_level
+    do i=1,nn
+      if (ht(i) <= fill_level) then
+        ht(i)  = fill_level
+      end if
+    end do
+
+    vol_tester  = sum(ht-h)*dx*dy
+    error       = vol_tester - vol
+
+    ! testing error and adjusting fill level
+    if (error >= 0.d0) then ! fill level was too high
+      top = fill_level
+      bottom = bottom
+      fill_level = (top+bottom)/2
+    else ! fill level was too low
+      top = top
+      bottom = fill_level
+      fill_level = (top+bottom)/2
+    end if
+
+    if (iter_counter >=10000) then
+      FSCAPE_RAISE_MESSAGE('Marine error: Mass conserving filling with available sediment not converged',ERR_NotConverged,ierr)
+      FSCAPE_CHKERR(ierr)
+    end if
+  end do while_loop
+  if (iter_counter > 1) then
+     write(*,'(a)')'------ FastScape mass conserving marine aggradation used ------'
+     write(*,'(a,es15.4,a,es15.4)')'average error [mm]:',abs(error)/(dx*dy),' average tol [mm]:',abs(tol)/(dx*dy)
+    write(*,'(a,i6,a)')'sed routine needed',iter_counter,' iterations'
+    write(*,'(a,f8.4)')'percent of deposited sed: ',vol_tester/vol * 100
+    write(*,'(a,f13.3,a,f13.3)')'fill_level = ',fill_level,', sealevel = ',sealevel
+  endif
+
+else if (marine_aggradation_rate > 0.d0) then
+  ! Filling with constant aggradation rate up to sealevel
+  do i=1,nn
+    if (ht(i) <= sealevel) then
+      ht(i)  = ht(i) + marine_aggradation_rate*dt
+      if (ht(i) > sealevel) ht(i) = sealevel
+    end if
+  end do
+  write(*,'(a)')'------ FastScape marine filling with constant aggradation rate used ------'
+  write(*,'(a,f13.6)')'Aggradation rate = ',marine_aggradation_rate
+end if
+
+h = ht
+
+dh = ht-h
+
+dh_dep = dh
+
+etot=etot+ht-h
+erate=erate+(ht-h)/dt
+
+! updates basement
+b=min(h,b)
+
+! update rock_type
+where (dh > 0.0d0 .and. h <= sealevel ) rock_type = 3 ! marine sed.
+
+deallocate (flux,shelfdepth,ht,Fs,dh,Fmixt)
+
+end subroutine MarineAggradation
