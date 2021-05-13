@@ -682,18 +682,25 @@ if (marine_aggradation_rate < 0.d0) then
       fill_level = (top+bottom)/2
     end if
 
+    ! save guard to prevent filling above sealevel
+    if (fill_level > sealevel) then
+      fill_level = sealevel
+      write(*,*)'Basin filled up to sealevel. Stopping aggradation at sealevel.'
+      exit while_loop
+    endif
+    
     if (iter_counter >=10000) then
       FSCAPE_RAISE_MESSAGE('Marine error: Mass conserving filling with available sediment not converged',ERR_NotConverged,ierr)
       FSCAPE_CHKERR(ierr)
     end if
+
   end do while_loop
-  if (iter_counter > 1) then
-     write(*,'(a)')'------ FastScape mass conserving marine aggradation used ------'
-     write(*,'(a,es15.4,a,es15.4)')'average error [mm]:',abs(error)/(dx*dy),' average tol [mm]:',abs(tol)/(dx*dy)
-    write(*,'(a,i6,a)')'sed routine needed',iter_counter,' iterations'
-    write(*,'(a,f8.4)')'percent of deposited sed: ',vol_tester/vol * 100
-    write(*,'(a,f13.3,a,f13.3)')'fill_level = ',fill_level,', sealevel = ',sealevel
-  endif
+
+  write(*,'(a)')'------ FastScape mass conserving marine aggradation used ------'
+  write(*,'(a,es15.4,a,es15.4)')'average error [mm]:',abs(error)/(dx*dy),' average tol [mm]:',abs(tol)/(dx*dy)
+  write(*,'(a,i6,a)')'sed routine needed',iter_counter,' iterations'
+  write(*,'(a,f8.4)')'percent of deposited sed: ',vol_tester/vol * 100
+  write(*,'(a,f13.3,a,f13.3)')'fill_level = ',fill_level,', sealevel = ',sealevel
 
 else if (marine_aggradation_rate > 0.d0) then
   ! Filling with constant aggradation rate up to sealevel
