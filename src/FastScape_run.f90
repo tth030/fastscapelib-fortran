@@ -70,8 +70,10 @@ call random_number (h)
     ij=(j-1)*nx+i
       if (j.lt.ny/2) then
       h(ij)=h(ij)-200.d0
+      !u(ij)=-5.d-4
       elseif (j.gt.ny/2) then
       h(ij)=h(ij)+1000.d0
+      !u(ij)=5.d-4
       endif
     enddo
   enddo

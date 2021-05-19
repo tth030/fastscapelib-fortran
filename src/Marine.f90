@@ -646,62 +646,68 @@ flux=flux/dt
 ! and to compute timestepping criterion based on the maximum sediment flux at the shoreline.
 sedflux_shore = flux
 ht  = h
-
 if (marine_aggradation_rate < 0.d0) then
+  if (sum(sedflux_shore) > 0.d0) then
 
-  vol           = sum(sedflux_shore*dt)*dx*dy
-  tol           = 1e-4*dx*dy      ! 0.1 mm on average
-  fill_level    = sealevel        ! initialise fill_level to be sealevel
-  top           = maxval(h)       ! initially top and bottom are the model max and min
-  bottom        = minval(h)
-  iter_counter  = 0
-  error         = 2*tol
+    vol           = sum(sedflux_shore*dt)*dx*dy
+    tol           = 1e-4*dx*dy      ! 0.1 mm on average
+    fill_level    = sealevel        ! initialise fill_level to be sealevel
+    top           = maxval(h)       ! initially top and bottom are the model max and min
+    bottom        = minval(h)
+    iter_counter  = 0
+    error         = 2*tol
 
-  while_loop: do while (abs(error) >= abs(tol))
-    iter_counter = iter_counter + 1
-    ht  = h
+    while_loop: do while (abs(error) >= abs(tol))
+      iter_counter = iter_counter + 1
+      ht  = h
 
-    ! Fill the tester to fill_level
-    do i=1,nn
-      if (ht(i) <= fill_level) then
-        ht(i)  = fill_level
+      ! Fill the tester to fill_level
+      do i=1,nn
+        if (ht(i) <= fill_level) then
+          ht(i)  = fill_level
+        end if
+      end do
+
+      vol_tester  = sum(ht-h)*dx*dy
+      error       = vol_tester - vol
+
+      ! testing error and adjusting fill level
+      if (error >= 0.d0) then ! fill level was too high
+        top = fill_level
+        bottom = bottom
+        fill_level = (top+bottom)/2
+      else ! fill level was too low
+        top = top
+        bottom = fill_level
+        fill_level = (top+bottom)/2
       end if
-    end do
 
-    vol_tester  = sum(ht-h)*dx*dy
-    error       = vol_tester - vol
+      ! save guard to prevent filling above sealevel
+      if (fill_level > sealevel) then
+        fill_level = sealevel
+        write(*,*)'Basin filled up to sealevel. Stopping aggradation at sealevel.'
+        exit while_loop
+      endif
 
-    ! testing error and adjusting fill level
-    if (error >= 0.d0) then ! fill level was too high
-      top = fill_level
-      bottom = bottom
-      fill_level = (top+bottom)/2
-    else ! fill level was too low
-      top = top
-      bottom = fill_level
-      fill_level = (top+bottom)/2
-    end if
+      if (iter_counter >=10000) then
+        write(*,'(a)')'------ FastScape mass conserving marine aggradation failed ------'
+        write(*,'(a,es15.4,a,es15.4)')'average error [mm]:',abs(error)/(dx*dy),' average tol [mm]:',abs(tol)/(dx*dy)
+        write(*,'(a,i6,a)')'sed routine needed',iter_counter,' iterations'
+        write(*,'(a,f8.4)')'percent of deposited sed: ',vol_tester/vol * 100
+        write(*,'(a,f13.3,a,f13.3)')'fill_level = ',fill_level,', sealevel = ',sealevel
+        write(*,'(a,f8.4)')'sum sedflux: ',sum(sedflux_shore)
+        FSCAPE_RAISE_MESSAGE('Marine error: Mass conserving filling with available sediment not converged',ERR_NotConverged,ierr)
+        FSCAPE_CHKERR(ierr)
+      end if
 
-    ! save guard to prevent filling above sealevel
-    if (fill_level > sealevel) then
-      fill_level = sealevel
-      write(*,*)'Basin filled up to sealevel. Stopping aggradation at sealevel.'
-      exit while_loop
-    endif
-    
-    if (iter_counter >=10000) then
-      FSCAPE_RAISE_MESSAGE('Marine error: Mass conserving filling with available sediment not converged',ERR_NotConverged,ierr)
-      FSCAPE_CHKERR(ierr)
-    end if
+    end do while_loop
 
-  end do while_loop
-
-  write(*,'(a)')'------ FastScape mass conserving marine aggradation used ------'
-  write(*,'(a,es15.4,a,es15.4)')'average error [mm]:',abs(error)/(dx*dy),' average tol [mm]:',abs(tol)/(dx*dy)
-  write(*,'(a,i6,a)')'sed routine needed',iter_counter,' iterations'
-  write(*,'(a,f8.4)')'percent of deposited sed: ',vol_tester/vol * 100
-  write(*,'(a,f13.3,a,f13.3)')'fill_level = ',fill_level,', sealevel = ',sealevel
-
+    write(*,'(a)')'------ FastScape mass conserving marine aggradation used ------'
+    write(*,'(a,es15.4,a,es15.4)')'average error [mm]:',abs(error)/(dx*dy),' average tol [mm]:',abs(tol)/(dx*dy)
+    write(*,'(a,i6,a)')'sed routine needed',iter_counter,' iterations'
+    write(*,'(a,f8.4)')'percent of deposited sed: ',vol_tester/vol * 100
+    write(*,'(a,f13.3,a,f13.3)')'fill_level = ',fill_level,', sealevel = ',sealevel
+  end if
 else if (marine_aggradation_rate > 0.d0) then
   ! Filling with constant aggradation rate up to sealevel
   do i=1,nn
