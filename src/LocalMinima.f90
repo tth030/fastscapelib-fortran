@@ -63,6 +63,8 @@ subroutine LocalMinima (stack,rec,bc,ndon,donor,h,length,nx,ny,dx,dy,ierr)
   allocate(active_nodes(nn))
   active_nodes=.not.bc
 
+  where (h < sealevel) active_nodes = .false.
+
   nlocmin=0
   do k=1,nn
     if (rec(k).eq.k .and. active_nodes(k)) nlocmin=nlocmin+1
