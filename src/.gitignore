@@ -1,0 +1,5 @@
+*.o
+*.mod
+*__genmod.f90
+FastScape_run_f90
+Marine.f90_old

@@ -3,6 +3,14 @@
 ifneq ($(findstring geodyn,$(HOSTNAME)),)
   F90 = mpif90
   F90_OPTIONS = -O -Mfreeform -Mdclchk -Mstandard -Mpreprocess
+else ifneq ($(findstring pangraph,$(HOSTNAME)),)
+  F90 = mpif90
+  F90_OPTIONS = -O -cpp
+  CC = gcc
+else ifneq ($(findstring betzy,$(HOSTNAME)),)
+  F90 = ifort
+  F90_OPTIONS = -stand f08 -free -implicitnone -convert big_endian -check bounds -warn all -fpp
+  CC = gcc
 else
   F90 = gfortran
   CC = gcc-10
@@ -19,7 +27,7 @@ FASTSCAPE_OBJ = FastScapeErrorCodes.o FastScape_ctx.o FastScape_api.o StreamPowe
 all: $(FASTSCAPE_OBJ) LIB
 	make LIB
 	make RUNF90
-	make RUNC
+	#make RUNC
 
 LIB: $(FASTSCAPE_OBJ)
 	ar rc libFastScape.a $(FASTSCAPE_OBJ)

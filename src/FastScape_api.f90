@@ -250,7 +250,7 @@ subroutine FastScape_Execute_Step(ierr)
 
   if (runAdvect) then
     call cpu_time (time_in)
-    call Advect ()
+    call Advect (ierr)
     call cpu_time (time_out)
     timeAdvect = timeAdvect + time_out-time_in
   endif

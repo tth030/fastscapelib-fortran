@@ -1,4 +1,5 @@
-subroutine Advect ()
+#include "Error.fpp"
+subroutine Advect (ierr)
 
   use FastScapeContext
 
@@ -11,6 +12,7 @@ subroutine Advect ()
   double precision, dimension(:), allocatable :: diag,sup,inf,rhs,res
   double precision dx,dy
   integer i,j
+  integer ierr
 
   !print*,'Advect'
 
@@ -42,15 +44,15 @@ subroutine Advect ()
     inf(nx)=0.d0
 
     rhs=h2(:,j)
-    call tridag (inf,diag,sup,rhs,res,nx)
+    call tridag (inf,diag,sup,rhs,res,nx,ierr);FSCAPE_CHKERR(ierr)
     h2(:,j)=res
 
     rhs=b2(:,j)
-    call tridag (inf,diag,sup,rhs,res,nx)
+    call tridag (inf,diag,sup,rhs,res,nx,ierr);FSCAPE_CHKERR(ierr)
     b2(:,j)=res
 
     rhs=etot2(:,j)
-    call tridag (inf,diag,sup,rhs,res,nx)
+    call tridag (inf,diag,sup,rhs,res,nx,ierr);FSCAPE_CHKERR(ierr)
     etot2(:,j)=res
 
   enddo
@@ -82,15 +84,15 @@ subroutine Advect ()
     inf(ny)=0.d0
 
     rhs=h2(i,:)
-    call tridag (inf,diag,sup,rhs,res,ny)
+    call tridag (inf,diag,sup,rhs,res,ny,ierr);FSCAPE_CHKERR(ierr)
     h2(i,:)=res
 
     rhs=b2(i,:)
-    call tridag (inf,diag,sup,rhs,res,ny)
+    call tridag (inf,diag,sup,rhs,res,ny,ierr);FSCAPE_CHKERR(ierr)
     b2(i,:)=res
 
     rhs=etot2(i,:)
-    call tridag (inf,diag,sup,rhs,res,ny)
+    call tridag (inf,diag,sup,rhs,res,ny,ierr);FSCAPE_CHKERR(ierr)
     etot2(i,:)=res
 
   enddo

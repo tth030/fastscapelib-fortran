@@ -10,6 +10,7 @@ real :: time_in,time_out
 double precision :: m,n,g1,g2,preci_rate,p_flow_dir_exp,kf2,kd2
 double precision xl,yl,dx,dy,dt
 double precision sealevel, poro1, poro2, z1, z2, ratio, L, kds1, kds2
+double precision vexp
 
 integer i,j,ij
 integer ierr
@@ -124,8 +125,10 @@ call cpu_time (time_in)
     call FastScape_Debug(ierr);FSCAPE_CHKERR_ABORT(ierr)
     field(:,1)=etot
     field(:,2)=erate
-    call FastScape_VTK (chi, 2.d0,ierr);FSCAPE_CHKERR_ABORT(ierr) ! if value > 0, elevation plus value is written to file. If value <0, basement and sealevel + value is written to file.
-    call FastScape_VTK (erate, -2.d0,ierr);FSCAPE_CHKERR_ABORT(ierr) ! if value > 0, elevation plus value is written to file. If value <0, basement and sealevel + value is written to file.
+    vexp = 2.d0
+    call FastScape_VTK (chi, vexp,ierr);FSCAPE_CHKERR_ABORT(ierr) ! if value > 0, elevation plus value is written to file. If value <0, basement and sealevel + value is written to file.
+    vexp = -2.d0
+    call FastScape_VTK (erate, vexp,ierr);FSCAPE_CHKERR_ABORT(ierr) ! if value > 0, elevation plus value is written to file. If value <0, basement and sealevel + value is written to file.
     !field(:,3)=sedflux
     !field(:,4)=sedflux_shore
     !call VTK (h,b,2,field,nx,ny,dx,dy,istep)

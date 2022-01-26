@@ -11,7 +11,8 @@ module FastScapeErrorCodes
                         ERR_SetupNotRun         = 7,  &
                         ERR_NotConverged        = 8
 
-  character(len=50), dimension(8) :: err_names = [character(len=50) :: "Default run time error", &
+!  character(len=50), dimension(8) :: err_names = [character(len=50) :: "Default run time error", &
+  character(len=50), dimension(8) :: err_names = [ "Default run time error", &
       "File error: File not found",             &
       "File error: File open failed",           &
       "Parameter error: Input invalid",         &
