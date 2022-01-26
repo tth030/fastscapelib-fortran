@@ -3,6 +3,10 @@
 ifneq ($(findstring geodyn,$(HOSTNAME)),)
   F90 = mpif90
   F90_OPTIONS = -O -Mfreeform -Mdclchk -Mstandard -Mpreprocess
+else ifneq ($(findstring pangraph,$(HOSTNAME)),)
+  F90 = mpif90
+  F90_OPTIONS = -O -cpp
+  CC = gcc
 else
   F90 = gfortran
   CC = gcc-10
