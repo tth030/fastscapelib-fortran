@@ -12,13 +12,14 @@ module FastScapeErrorCodes
                         ERR_NotConverged        = 8
 
 !  character(len=50), dimension(8) :: err_names = [character(len=50) :: "Default run time error", &
-  character(len=50), dimension(8) :: err_names = [ "Default run time error", &
-      "File error: File not found",             &
-      "File error: File open failed",           &
-      "Parameter error: Input invalid",         &
-      "Parameter error: Out of range" ,         &
-      "Solver error: Tridiag not solvable",     &
+  character(len=38), dimension(8) :: err_names = [ &
+      "Default run time error                ", &
+      "File error: File not found            ", &
+      "File error: File open failed          ", &
+      "Parameter error: Input invalid        ", &
+      "Parameter error: Out of range         ", &
+      "Solver error: Tridiag not solvable    ", &
       "Order invalid: Must call SetUp() first", &
-      "Solver error: not converged"  ]
+      "Solver error: not converged           "  ]
 
 end module FastScapeErrorCodes
