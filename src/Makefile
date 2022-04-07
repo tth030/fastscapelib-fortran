@@ -19,7 +19,25 @@ endif
 
 ON_WINDOWS = f
 
-FASTSCAPE_OBJ = FastScapeErrorCodes.o FastScape_ctx.o FastScape_api.o StreamPowerLaw.o Diffusion.o LocalMinima.o Advect.o Advect3d.o Marine.o VTK.o FlowRouting.o Strati.o Uplift.o TerrainDerivatives.o
+FASTSCAPE_OBJ = \
+FastScapeErrorCodes.o \
+NumRecipes.o \
+Qshep2d_mod.o \
+FastScape_ctx.o \
+FastScape_api.o \
+StreamPowerLaw.o \
+Diffusion.o \
+LocalMinima.o \
+Advect.o \
+Advect3d.o \
+Advect3d_2.o \
+Advect3d_3.o \
+Marine.o \
+VTK.o \
+FlowRouting.o \
+Strati.o \
+Uplift.o \
+TerrainDerivatives.o
 
 .f90.o:
 	$(F90) -c $(F90_OPTIONS) $*.f90 -L/usr/lib -llapack -L/usr/lib -lblas

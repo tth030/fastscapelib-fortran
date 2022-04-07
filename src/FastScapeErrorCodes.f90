@@ -9,10 +9,11 @@ module FastScapeErrorCodes
                         ERR_ParameterOutOfRange = 5,  &
                         ERR_TridiagNotSolvable  = 6,  &
                         ERR_SetupNotRun         = 7,  &
-                        ERR_NotConverged        = 8
+                        ERR_NotConverged        = 8,  &
+                        ERR_NrerrorNumRecipes   = 9
 
 !  character(len=50), dimension(8) :: err_names = [character(len=50) :: "Default run time error", &
-  character(len=38), dimension(8) :: err_names = [ &
+  character(len=38), dimension(9) :: err_names = [ &
       "Default run time error                ", &
       "File error: File not found            ", &
       "File error: File open failed          ", &
@@ -20,6 +21,7 @@ module FastScapeErrorCodes
       "Parameter error: Out of range         ", &
       "Solver error: Tridiag not solvable    ", &
       "Order invalid: Must call SetUp() first", &
-      "Solver error: not converged           "  ]
+      "Solver error: not converged           ", &
+      "Num. Recipes error                    "  ]
 
 end module FastScapeErrorCodes

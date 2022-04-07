@@ -251,6 +251,8 @@ subroutine FastScape_Execute_Step(ierr)
   if (runAdvect3d) then
     call cpu_time (time_in)
     call Advect3d (ierr)
+    !call Advect3d_2 (ierr)
+    !call Advect3d_3 (ierr)
     call cpu_time (time_out)
     timeAdvect3d = timeAdvect3d + time_out-time_in
   else
