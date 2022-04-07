@@ -22,8 +22,6 @@ subroutine Advect3d (ierr)
   double precision, dimension(:), allocatable :: Nnneighbours
   double precision, dimension(:), allocatable :: z_nneighbours,etot_nneighbours,b_nneighbours
 
-  real :: time_in, time_out
-
   !print*,'Advect3d'
 
   dx=xl/(nx-1)
@@ -96,10 +94,7 @@ subroutine Advect3d (ierr)
         b_nneighbours(k)   =b(pair(k))
      end do
 
-     call cpu_time (time_in)
      call compute_SF3 (nneighbours,pair(1:nneighbours),nn,xtemp,ytemp,xres(counter),yres(counter),rcut,Nnneighbours(1:nneighbours))
-     call cpu_time (time_out)
-     timeAdvect3d_SF3 = timeAdvect3d_SF3 + time_out-time_in
 
      zres(counter)    = dot_product(Nnneighbours(1:nneighbours),z_nneighbours(1:nneighbours))
      etotres(counter) = dot_product(Nnneighbours(1:nneighbours),etot_nneighbours(1:nneighbours))

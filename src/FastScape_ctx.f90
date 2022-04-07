@@ -31,7 +31,6 @@ module FastScapeContext
   integer, dimension(:), allocatable :: rock_type ! 1 is basement, 2 is cont. sed, 3 is marine sed.
   logical :: runSPL, runAdvect, runAdvect3d, runDiffusion, runStrati, runUplift, runMarine
   real :: timeSPL, timeAdvect, timeAdvect3d, timeDiffusion, timeStrati, timeUplift, timeMarine
-  real :: timeAdvect3d_SF3, timeAdvect3d_SF3_lapack, timeAdvect3d_SF3_P, timeAdvect3d_SF3_W, timeAdvect3d_SF3_B, timeAdvect3d_SF3_A
   double precision, dimension(:,:), allocatable :: reflector
   double precision, dimension(:,:,:), allocatable :: fields
   integer nfield, nfreq, nreflector, nfreqref, ireflector
@@ -57,12 +56,6 @@ module FastScapeContext
     timeSPL = 0.
     timeAdvect = 0.
     timeAdvect3d = 0.
-    timeAdvect3d_SF3 = 0.
-    timeAdvect3d_SF3_lapack = 0.
-    timeAdvect3d_SF3_P = 0.
-    timeAdvect3d_SF3_W = 0.
-    timeAdvect3d_SF3_B = 0.
-    timeAdvect3d_SF3_A = 0.
     timeDiffusion = 0.
     timeStrati = 0.
     timeMarine = 0.
@@ -561,12 +554,6 @@ module FastScapeContext
     if (runMarine) write (*,*) 'Marine:',timeMarine
     if (runAdvect3d) then
       write (*,*) 'Advection3d:',timeAdvect3d
-      write (*,*) 'Advection3d - SF3:',timeAdvect3d_SF3
-      write (*,*) 'Advection3d - lapack:',timeAdvect3d_SF3_lapack
-      write (*,*) 'Advection3d - P:',timeAdvect3d_SF3_P
-      write (*,*) 'Advection3d - W:',timeAdvect3d_SF3_W
-      write (*,*) 'Advection3d - B:',timeAdvect3d_SF3_B
-      write (*,*) 'Advection3d - A:',timeAdvect3d_SF3_A
     else
       if (runAdvect) write (*,*) 'Advection:',timeAdvect
       if (runUplift) write (*,*) 'Uplift:',timeUplift
@@ -1058,8 +1045,6 @@ module FastScapeContext
     double precision, dimension(:), allocatable :: W
     double precision delta,x_j,y_j,dist,xij,yij
 
-    real :: time_in, time_out
-    
     xeval=xc
     yeval=yc
     
@@ -1080,7 +1065,6 @@ module FastScapeContext
     !==============================
     !=====[ compute P matrix ]=====
     !==============================
-    call cpu_time (time_in)
     do i=1,npts 
        jp=pair(i)
        x_j=xtemp(jp)
@@ -1094,13 +1078,10 @@ module FastScapeContext
        P(i,6)=(y_j-yc)**2
        end if
     end do
-    call cpu_time (time_out)
-    timeAdvect3d_SF3_P = timeAdvect3d_SF3_P + time_out-time_in
    
     !==============================
     !=====[ compute W matrix ]=====
     !==============================
-    call cpu_time (time_in)
     do i=1,npts
        jp=pair(i)
        xij=abs(xc-xtemp(jp))
@@ -1108,38 +1089,26 @@ module FastScapeContext
        dist=sqrt(xij**2+yij**2) 
        W(i)=kernel(dist,rcut)
     end do
-    call cpu_time (time_out)
-    timeAdvect3d_SF3_W = timeAdvect3d_SF3_W + time_out-time_in
-  
     
     !==============================
     !=====[ compute B matrix ]=====
     !==============================
-    call cpu_time (time_in)
     do i=1,mpl
        do j=1,npts
           Am1B(i,j)=P(j,i)*W(j) 
        end do
     end do
-    call cpu_time (time_out)
-    timeAdvect3d_SF3_B = timeAdvect3d_SF3_B + time_out-time_in
    
     !==============================
     !=====[ compute A matrix ]=====
     !==============================
-    call cpu_time (time_in) 
     A=matmul(Am1B,P)
-    call cpu_time (time_out)
-    timeAdvect3d_SF3_A = timeAdvect3d_SF3_A + time_out-time_in
    
     !==============================
     !=====[ compute A^{-1}.B ]=====
     !==============================
-    call cpu_time (time_in)
     call dgetrf ( mpl, mpl, A, mpl, ipvt1, info ) ; if (info/=0) stop 'pb dgetrf Am1B'
     call dgetrs ( 'N', mpl, npts, A, mpl, ipvt1, Am1B, mpl, INFO ) ; if (info/=0) stop 'pb dgetrs Am1B'
-    call cpu_time (time_out)
-    timeAdvect3d_SF3_lapack = timeAdvect3d_SF3_lapack + time_out-time_in
     
     !=========================
     !=====[ compute Nnpts ]=====
