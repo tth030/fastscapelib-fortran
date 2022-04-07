@@ -248,18 +248,25 @@ subroutine FastScape_Execute_Step(ierr)
 
   ierr=0
 
-  if (runAdvect) then
+  if (runAdvect3d) then
     call cpu_time (time_in)
-    call Advect (ierr)
+    call Advect3d (ierr)
     call cpu_time (time_out)
-    timeAdvect = timeAdvect + time_out-time_in
-  endif
-
-  if (runUplift) then
-    call cpu_time (time_in)
-    call Uplift()
-    call cpu_time (time_out)
-    timeUplift = timeUplift + time_out-time_in
+    timeAdvect3d = timeAdvect3d + time_out-time_in
+  else
+    if (runAdvect) then
+      call cpu_time (time_in)
+      call Advect (ierr)
+      call cpu_time (time_out)
+      timeAdvect = timeAdvect + time_out-time_in
+    endif
+  
+    if (runUplift) then
+      call cpu_time (time_in)
+      call Uplift()
+      call cpu_time (time_out)
+      timeUplift = timeUplift + time_out-time_in
+    endif
   endif
 
   if (runSPL) then

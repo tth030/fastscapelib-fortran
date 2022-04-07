@@ -19,10 +19,10 @@ endif
 
 ON_WINDOWS = f
 
-FASTSCAPE_OBJ = FastScapeErrorCodes.o FastScape_ctx.o FastScape_api.o StreamPowerLaw.o Diffusion.o LocalMinima.o Advect.o Marine.o VTK.o FlowRouting.o Strati.o Uplift.o TerrainDerivatives.o
+FASTSCAPE_OBJ = FastScapeErrorCodes.o FastScape_ctx.o FastScape_api.o StreamPowerLaw.o Diffusion.o LocalMinima.o Advect.o Advect3d.o Marine.o VTK.o FlowRouting.o Strati.o Uplift.o TerrainDerivatives.o
 
 .f90.o:
-	$(F90) -c $(F90_OPTIONS) $*.f90
+	$(F90) -c $(F90_OPTIONS) $*.f90 -L/usr/lib -llapack -L/usr/lib -lblas
 
 all: $(FASTSCAPE_OBJ) LIB
 	make LIB
@@ -33,10 +33,10 @@ LIB: $(FASTSCAPE_OBJ)
 	ar rc libFastScape.a $(FASTSCAPE_OBJ)
 
 RUNF90: LIB
-	$(F90) -O $(F90_OPTIONS) FastScape_run.f90 -o FastScape_run_f90 -L. -lFastScape
+	$(F90) -O $(F90_OPTIONS) FastScape_run.f90 -o FastScape_run_f90 -L. -lFastScape -L/usr/lib -llapack -L/usr/lib -lblas
 
 RUNC: LIB
-	$(CC) -O FastScape_run.c -o FastScape_run_c -L. -lFastScape -lgfortran
+	$(CC) -O FastScape_run.c -o FastScape_run_c -L. -lFastScape -lgfortran -L/usr/lib -llapack -L/usr/lib -lblas
 
 clean:
 	rm *.o *.mod *.a

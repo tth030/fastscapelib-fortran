@@ -23,14 +23,15 @@ module FastScapeContext
   double precision, target, dimension(:), allocatable :: g
   double precision, target, dimension(:), allocatable :: dh_dep, sedflux_shore
   double precision, target, dimension(:), allocatable :: p_mfd_exp
-  double precision, dimension(:,:), pointer, contiguous :: h2, vx2, vy2, etot2, b2
+  double precision, dimension(:,:), pointer, contiguous :: h2, vx2, vy2, u2, etot2, b2
   double precision :: xl, yl, dt, kfsed, m, n, kdsed, g1, g2, p
   double precision :: sealevel, poro1, poro2, zporo1, zporo2, ratio, layer, kdsea1, kdsea2
   integer, dimension(:), allocatable :: stack, ndon, rec
   integer, dimension(:,:), allocatable :: don
   integer, dimension(:), allocatable :: rock_type ! 1 is basement, 2 is cont. sed, 3 is marine sed.
-  logical :: runSPL, runAdvect, runDiffusion, runStrati, runUplift, runMarine
-  real :: timeSPL, timeAdvect, timeDiffusion, timeStrati, timeUplift, timeMarine
+  logical :: runSPL, runAdvect, runAdvect3d, runDiffusion, runStrati, runUplift, runMarine
+  real :: timeSPL, timeAdvect, timeAdvect3d, timeDiffusion, timeStrati, timeUplift, timeMarine
+  real :: timeAdvect3d_SF3, timeAdvect3d_SF3_lapack, timeAdvect3d_SF3_P, timeAdvect3d_SF3_W, timeAdvect3d_SF3_B, timeAdvect3d_SF3_A
   double precision, dimension(:,:), allocatable :: reflector
   double precision, dimension(:,:,:), allocatable :: fields
   integer nfield, nfreq, nreflector, nfreqref, ireflector
@@ -55,6 +56,13 @@ module FastScapeContext
     setup_has_been_run = .false.
     timeSPL = 0.
     timeAdvect = 0.
+    timeAdvect3d = 0.
+    timeAdvect3d_SF3 = 0.
+    timeAdvect3d_SF3_lapack = 0.
+    timeAdvect3d_SF3_P = 0.
+    timeAdvect3d_SF3_W = 0.
+    timeAdvect3d_SF3_B = 0.
+    timeAdvect3d_SF3_A = 0.
     timeDiffusion = 0.
     timeStrati = 0.
     timeMarine = 0.
@@ -83,6 +91,7 @@ module FastScapeContext
     b2(1:nx,1:ny) => b
     vx2(1:nx,1:ny) => vx
     vy2(1:nx,1:ny) => vy
+    u2(1:nx,1:ny) => u
     etot2(1:nx,1:ny) => etot
 
     call SetBC (1111)
@@ -108,6 +117,7 @@ module FastScapeContext
 
     runSPL = .false.
     runAdvect = .false.
+    runAdvect3d = .false.
     runDiffusion = .false.
     runStrati = .false.
     runMarine = .false.
@@ -549,8 +559,18 @@ module FastScapeContext
     if (runSPL) write (*,*) 'SPL:',timeSPL
     if (runDiffusion) write (*,*) 'Diffusion:',timeDiffusion
     if (runMarine) write (*,*) 'Marine:',timeMarine
-    if (runAdvect) write (*,*) 'Advection:',timeAdvect
-    if (runUplift) write (*,*) 'Uplift:',timeUplift
+    if (runAdvect3d) then
+      write (*,*) 'Advection3d:',timeAdvect3d
+      write (*,*) 'Advection3d - SF3:',timeAdvect3d_SF3
+      write (*,*) 'Advection3d - lapack:',timeAdvect3d_SF3_lapack
+      write (*,*) 'Advection3d - P:',timeAdvect3d_SF3_P
+      write (*,*) 'Advection3d - W:',timeAdvect3d_SF3_W
+      write (*,*) 'Advection3d - B:',timeAdvect3d_SF3_B
+      write (*,*) 'Advection3d - A:',timeAdvect3d_SF3_A
+    else
+      if (runAdvect) write (*,*) 'Advection:',timeAdvect
+      if (runUplift) write (*,*) 'Uplift:',timeUplift
+    endif
     if (runStrati) write (*,*) 'Strati:',timeStrati
 
   end subroutine Debug
@@ -615,7 +635,8 @@ module FastScapeContext
     double precision, intent(in) :: ux(*),uy(*)
     integer i
 
-    runAdvect = .true.
+    !runAdvect = .true.
+    runAdvect3d = .true.
 
     do i=1,nn
       vx(i) = ux(i)
@@ -1010,4 +1031,164 @@ module FastScapeContext
 
     end subroutine SetMarineAggradationRate
 
+    !---------------------------------------------------------------
+
+    subroutine compute_SF3 (npts,pair,nsurface,xtemp,ytemp,xc,yc,rcut,Nnpts)
+    
+    implicit none
+    
+    !==============================================================================!
+    !==============================================================================!
+    ! arguments
+    
+    integer npts,nsurface
+    integer pair(npts)
+    double precision xtemp(nsurface),ytemp(nsurface)
+    double precision xc,yc,rcut
+    double precision Nnpts(npts)
+    double precision xeval,yeval
+    
+    !==============================================================================!
+    ! other variables
+    
+    integer mpl,jp,i,j,info
+    integer, dimension(:), allocatable :: ipvt1
+    double precision, dimension(:,:), allocatable :: Am1B,P
+    double precision, dimension(:,:), allocatable :: A
+    double precision, dimension(:), allocatable :: W
+    double precision delta,x_j,y_j,dist,xij,yij
+
+    real :: time_in, time_out
+    
+    xeval=xc
+    yeval=yc
+    
+    delta=1.d-10
+    
+    !if (npts<mpl) stop 'npts<mpl'
+    
+    mpl=6
+    
+    if (npts <= mpl ) mpl=3 
+    
+    allocate(Am1B(mpl,npts))
+    allocate(P(npts,mpl))
+    allocate(A(mpl,mpl))
+    allocate(W(npts))
+    allocate(ipvt1(mpl))  
+    
+    !==============================
+    !=====[ compute P matrix ]=====
+    !==============================
+    call cpu_time (time_in)
+    do i=1,npts 
+       jp=pair(i)
+       x_j=xtemp(jp)
+       y_j=ytemp(jp)
+       P(i,1)=1.d0
+       P(i,2)=x_j-xc
+       P(i,3)=y_j-yc
+       if(mpl>3) then
+       P(i,4)=(x_j-xc)**2
+       P(i,5)=(x_j-xc)*(y_j-yc)
+       P(i,6)=(y_j-yc)**2
+       end if
+    end do
+    call cpu_time (time_out)
+    timeAdvect3d_SF3_P = timeAdvect3d_SF3_P + time_out-time_in
+   
+    !==============================
+    !=====[ compute W matrix ]=====
+    !==============================
+    call cpu_time (time_in)
+    do i=1,npts
+       jp=pair(i)
+       xij=abs(xc-xtemp(jp))
+       yij=abs(yc-ytemp(jp))
+       dist=sqrt(xij**2+yij**2) 
+       W(i)=kernel(dist,rcut)
+    end do
+    call cpu_time (time_out)
+    timeAdvect3d_SF3_W = timeAdvect3d_SF3_W + time_out-time_in
+  
+    
+    !==============================
+    !=====[ compute B matrix ]=====
+    !==============================
+    call cpu_time (time_in)
+    do i=1,mpl
+       do j=1,npts
+          Am1B(i,j)=P(j,i)*W(j) 
+       end do
+    end do
+    call cpu_time (time_out)
+    timeAdvect3d_SF3_B = timeAdvect3d_SF3_B + time_out-time_in
+   
+    !==============================
+    !=====[ compute A matrix ]=====
+    !==============================
+    call cpu_time (time_in) 
+    A=matmul(Am1B,P)
+    call cpu_time (time_out)
+    timeAdvect3d_SF3_A = timeAdvect3d_SF3_A + time_out-time_in
+   
+    !==============================
+    !=====[ compute A^{-1}.B ]=====
+    !==============================
+    call cpu_time (time_in)
+    call dgetrf ( mpl, mpl, A, mpl, ipvt1, info ) ; if (info/=0) stop 'pb dgetrf Am1B'
+    call dgetrs ( 'N', mpl, npts, A, mpl, ipvt1, Am1B, mpl, INFO ) ; if (info/=0) stop 'pb dgetrs Am1B'
+    call cpu_time (time_out)
+    timeAdvect3d_SF3_lapack = timeAdvect3d_SF3_lapack + time_out-time_in
+    
+    !=========================
+    !=====[ compute Nnpts ]=====
+    !=========================
+    
+    Nnpts=Am1B(1,:) 
+    
+    deallocate(Am1B)
+    deallocate(P)
+    deallocate(A)
+    deallocate(W)
+    deallocate(ipvt1)  
+    
+    end subroutine compute_SF3
+
+    !---------------------------------------------------------------
+
+    function kernel (r,rcut)
+    implicit none
+    double precision kernel
+    double precision r,rcut
+    double precision x
+    
+    x=r/rcut
+    
+    if (x.le.0.5d0) then
+       kernel=4.d0*(0.16666666666666666666666666666666667d0-x**2+x**3)
+    else
+       kernel=1.3333333333333333333333333333333333333333d0*(1.d0-x)**3
+    end if
+    
+    end function kernel
+
+    !---------------------------------------------------------------
+
+    function kernel_p (r,rcut)
+    implicit none
+    double precision kernel_p
+    double precision r,rcut
+    double precision x
+    
+    x=r/rcut
+    
+    if (x.le.0.5d0) then
+       kernel_p=4.d0/rcut*(-2.d0*x+3.d0*x**2)
+    else
+       kernel_p=-4.d0/rcut*(1.d0-x)**2
+    end if
+    
+    end function kernel_p
+    
   end module FastScapeContext
