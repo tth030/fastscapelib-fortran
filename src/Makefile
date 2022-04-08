@@ -14,7 +14,7 @@ else ifneq ($(findstring betzy,$(HOSTNAME)),)
 else
   F90 = gfortran
   CC = gcc-10
-  F90_OPTIONS = -ffree-form -ffree-line-length-none -fimplicit-none -fbounds-check -Wall -Wno-unused-dummy-argument -cpp -fall-intrinsics -fallow-argument-mismatch -fconvert=big-endian # needed to remove -std=f2008 -ffree-line-length-none is required for long macros
+  F90_OPTIONS = -fopenmp -ffree-form -ffree-line-length-none -fimplicit-none -fbounds-check -Wall -Wno-unused-dummy-argument -cpp -fall-intrinsics -fallow-argument-mismatch -fconvert=big-endian # needed to remove -std=f2008 -ffree-line-length-none is required for long macros
 endif
 
 ON_WINDOWS = f
@@ -30,6 +30,7 @@ Diffusion.o \
 LocalMinima.o \
 Advect.o \
 Advect3d.o \
+Advect3d_p.o \
 Advect3d_2.o \
 Advect3d_3.o \
 Marine.o \

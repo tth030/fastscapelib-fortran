@@ -15,7 +15,8 @@ subroutine Advect3d_3 (ierr)
   integer ierr
 
   ! 3d advection scheme
-  double precision, dimension(:), allocatable :: xtemp,ytemp,ztemp
+  double precision, dimension(:), allocatable, target :: xtemp,ytemp,ztemp
+  double precision, dimension(:,:), pointer, contiguous :: xtemp2,ytemp2,ztemp2
   double precision, dimension(:), allocatable :: zres,bres,etotres
 
   double precision, dimension(:,:), allocatable :: h2_2d,b2_2d,etot2_2d
@@ -34,6 +35,11 @@ subroutine Advect3d_3 (ierr)
 
   allocate(xtemp(nn),ytemp(nn),ztemp(nn),zres(nn),bres(nn),etotres(nn))
   allocate(xcoord(nx),ycoord(ny))
+
+  xtemp2(1:nx,1:ny) => xtemp
+  ytemp2(1:nx,1:ny) => ytemp
+  ztemp2(1:nx,1:ny) => ztemp
+
   counter = 0
   do j=1,ny
     do i=1,nx
@@ -58,6 +64,7 @@ subroutine Advect3d_3 (ierr)
 
   allocate(h2_2d(nx,ny),b2_2d(nx,ny),etot2_2d(nx,ny))
 
+  !TODO This is wrong !! only design for regular grid 
   call splie2(xcoord,ycoord,h2,h2_2d,ierr)
   call splie2(xcoord,ycoord,b2,b2_2d,ierr)
   call splie2(xcoord,ycoord,etot2,etot2_2d,ierr)

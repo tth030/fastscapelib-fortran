@@ -240,21 +240,26 @@ end subroutine FastScape_View
 subroutine FastScape_Execute_Step(ierr)
 
   use FastScapeContext
+  use omp_lib
 
   implicit none
 
   integer, intent(out):: ierr
   real :: time_in, time_out
+  double precision :: dtime_in, dtime_out
 
   ierr=0
 
   if (runAdvect3d) then
-    call cpu_time (time_in)
-    call Advect3d (ierr)
-    !call Advect3d_2 (ierr)
-    !call Advect3d_3 (ierr)
-    call cpu_time (time_out)
-    timeAdvect3d = timeAdvect3d + time_out-time_in
+    !call cpu_time (time_in)
+    !call Advect3d (ierr)
+    !!call Advect3d_2 (ierr)
+    !!call Advect3d_3 (ierr)
+    !call cpu_time (time_out)
+    dtime_in = omp_get_wtime()
+    call Advect3d_p (ierr)
+    dtime_out = omp_get_wtime()
+    timeAdvect3d = timeAdvect3d + dtime_out-dtime_in
   else
     if (runAdvect) then
       call cpu_time (time_in)
