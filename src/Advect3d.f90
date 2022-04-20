@@ -11,7 +11,7 @@ subroutine Advect3d (ierr)
 
   double precision dx,dy
   integer i,j
-  integer ierr
+  integer, intent(out) ::ierr
 
   ! 3d advection scheme
   double precision, dimension(:), allocatable :: xtemp,ytemp,ztemp
@@ -23,6 +23,8 @@ subroutine Advect3d (ierr)
   double precision, dimension(:), allocatable :: z_nneighbours,etot_nneighbours,b_nneighbours
 
   !print*,'Advect3d'
+
+  ierr = 0
 
   dx=xl/(nx-1)
   dy=yl/(ny-1)

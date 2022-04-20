@@ -10,9 +10,9 @@ subroutine Advect3d_p (ierr)
 
   implicit none
 
-  double precision dx,dy
+  double precision dx,dy,advect_dt
   integer i,j
-  integer ierr
+  integer,intent(out) :: ierr
 
   ! 3d advection scheme
   double precision, dimension(:), allocatable :: xtemp,ytemp,ztemp
@@ -31,8 +31,19 @@ subroutine Advect3d_p (ierr)
   !print *, 'Hello from process: ', thread_id
   !!$omp end parallel
 
+  ierr = 0
+
   dx=xl/(nx-1)
   dy=yl/(ny-1)
+  !advect_dt=advect_every_step*dt
+  ! Useful if dt is variable
+  advect_dt=totaltime-totaltime_before_advection
+
+  if (mod(step,advect_every_step)==0 .and. step/=0) then
+
+!  write(*,'(a,x,i6,x,f9.3,x,f13.3,x,f13.3)') 'Advection 3d step,advect_dt',step,advect_dt,totaltime,totaltime_before_advection
+
+  totaltime_before_advection=totaltime
 
   !===============================
   !=====[advect free surface]=====
@@ -53,9 +64,9 @@ subroutine Advect3d_p (ierr)
   enddo
   ! not needed end parallel do
  
-  xtemp=xtemp + vx * dt
-  ytemp=ytemp + vy * dt
-  ztemp=ztemp +  u * dt
+  xtemp=xtemp + vx * advect_dt
+  ytemp=ytemp + vy * advect_dt
+  ztemp=ztemp +  u * advect_dt
 
   !============================
   !=====[resample surface]=====
@@ -124,5 +135,8 @@ subroutine Advect3d_p (ierr)
   b    = min(b,h)
 
   deallocate(xtemp,ytemp,ztemp,xres,yres,zres,bres,etotres)
+
+  endif ! if (mod(step,advect_every_step)==0)
+
   return
   end subroutine Advect3d_p 

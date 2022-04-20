@@ -62,15 +62,15 @@ subroutine Marine(ierr)
 
   ! modifications made by Jean for multiple flow to distribute continental flux to ocean on the shelf
   ! Dec 2018
-  write(*,*)'before find_mult_rec'
+  !write(*,*)'before find_mult_rec'
 
   allocate (mmrec(8,nn),mmnrec(nn),mmwrec(8,nn),mmlrec(8,nn),mmstack(nn),mwater(nn))
 
   call find_mult_rec (h,rec,stack,mwater,mmrec,mmnrec,mmwrec,mmlrec,mmstack,nx,ny,dx,dy,0.d0,p_mfd_exp, &
     bounds_i1, bounds_i2, bounds_j1, bounds_j2, bounds_xcyclic, bounds_ycyclic, ierr)
 
-  write(*,*)'after find_mult_rec'
-  print*,count(flux>0.and.mmnrec==0),count(flux>0),count(mmstack==0)
+  !write(*,*)'after find_mult_rec'
+  !print*,count(flux>0.and.mmnrec==0),count(flux>0),count(mmstack==0)
 
   ! modifications made by Jean
   ! to compute shelf depth
@@ -123,10 +123,10 @@ subroutine Marine(ierr)
   ht=h
   Fmixt=Fmix
 
-  print*,'flux',minval(flux),sum(flux)/nx/ny,maxval(flux)
-  print*,'Fmix',minval(Fmix),sum(Fmix)/nx/ny,maxval(Fmix)
+  !print*,'flux',minval(flux),sum(flux)/nx/ny,maxval(flux)
+  !print*,'Fmix',minval(Fmix),sum(Fmix)/nx/ny,maxval(Fmix)
 
-  write(*,*)'before silt and sand coupling diffusion in ocean'
+  !write(*,*)'before silt and sand coupling diffusion in ocean'
 
 !  ! silt and sand coupling diffusion in ocean
 !  call SiltSandCouplingDiffusion (h,Fmix,flux*Fs,flux*(1.d0-Fs), &
@@ -429,7 +429,7 @@ subroutine Marine(ierr)
     err1=maxval(abs(h-hp))
     err2=maxval(abs(h-hp)/(1.d0+abs(h)))
 
-    print*,'nGSMarine',nGSMarine,minval(h-hp),sum(h-hp)/nn,maxval(h-hp),err1
+!    print*,'nGSMarine',nGSMarine,minval(h-hp),sum(h-hp)/nn,maxval(h-hp),err1
 
     if (nGSMarine.gt.1000) then
       print*,'Marine error: Multi-lithology diffusion not converging; decrease time step'
@@ -459,7 +459,7 @@ subroutine Marine(ierr)
   dh2=((h-ht)*(1.d0-Fmix)+layer*(Fmixt-Fmix))*(1.d0-poro2)
   dh=dh1+dh2
 
-  write(*,*)'after diffusion and before enforce_marine_mass_cons'
+  !write(*,*)'after diffusion and before enforce_marine_mass_cons'
 
   ! compute whether Marine diffusion was mass conserving. This might not be the case in basins
   ! with a lot of "underwater" topgraphy and little sediment input
@@ -476,7 +476,7 @@ subroutine Marine(ierr)
      endif
   endif
 
-  write(*,*)'after enforce_marine_mass_cons'
+  !write(*,*)'after enforce_marine_mass_cons'
 
   ! store deposited material in dh_dep to be able to transfer this value to coupled thermo-mechanical code
   ! where compaction can be applied if necessary.
@@ -561,11 +561,11 @@ subroutine SiltSandCouplingDiffusion (h,f,Q1,Q2,nx,ny,dx,dy,dt, &
 !  double precision Ap,Bp,Cp,Dp,Ep,Mp,Np
 !  character cbc*4
 
-  write(*,*) 'SiltSandCouplingDiffusion before checking seas exist'
+!  write(*,*) 'SiltSandCouplingDiffusion before checking seas exist'
 
   if (any(h<sealevel)) then  
 
-  write(*,*) 'SiltSandCouplingDiffusion there are seas, sea level = ',sealevel
+!  write(*,*) 'SiltSandCouplingDiffusion there are seas, sea level = ',sealevel
 
 !  write (cbc,'(i4)') ibc
 !

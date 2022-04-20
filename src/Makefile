@@ -2,19 +2,26 @@
 
 ifneq ($(findstring geodyn,$(HOSTNAME)),)
   F90 = mpif90
-  F90_OPTIONS = -O -Mfreeform -Mdclchk -Mstandard -Mpreprocess
+  #PGI
+  #F90_OPTIONS = -O -Mfree -Mdclchk -Mstandard -Mpreprocess -mp -Mipa=fast,inline
+  #INTEL
+  F90_OPTIONS = -O -free -implicitnone -convert big_endian -check bounds -warn all,noexternal -fpp
+  LIB_OPTION = -qopenmp -L/opt/intel/oneapi/mkl/2021.1.1/lib/intel64 -lmkl_intel_lp64 -lmkl_sequential -lmkl_core -lm -heap-arrays 8196
 else ifneq ($(findstring pangraph,$(HOSTNAME)),)
   F90 = mpif90
   F90_OPTIONS = -O -cpp
   CC = gcc
+  LIB_OPTION = -L/usr/lib -llapack -L/usr/lib -lblas
 else ifneq ($(findstring betzy,$(HOSTNAME)),)
   F90 = ifort
   F90_OPTIONS = -stand f08 -free -implicitnone -convert big_endian -check bounds -warn all -fpp
   CC = gcc
+  LIB_OPTION = -L/usr/lib -llapack -L/usr/lib -lblas
 else
   F90 = gfortran
   CC = gcc-10
-  F90_OPTIONS = -fopenmp -ffree-form -ffree-line-length-none -fimplicit-none -fbounds-check -Wall -Wno-unused-dummy-argument -cpp -fall-intrinsics -fallow-argument-mismatch -fconvert=big-endian # needed to remove -std=f2008 -ffree-line-length-none is required for long macros
+  F90_OPTIONS = -fopenmp -ffree-form -ffree-line-length-none -fimplicit-none -fbounds-check -Wall -Wno-unused-dummy-argument -cpp -fall-intrinsics -fallow-argument-mismatch -fconvert=big-endian # needed to remove -std=f2008
+  LIB_OPTION = -L/usr/lib -llapack -L/usr/lib -lblas
 endif
 
 ON_WINDOWS = f
@@ -41,7 +48,7 @@ Uplift.o \
 TerrainDerivatives.o
 
 .f90.o:
-	$(F90) -c $(F90_OPTIONS) $*.f90 -L/usr/lib -llapack -L/usr/lib -lblas
+	$(F90) -c $(F90_OPTIONS) $*.f90 $(LIB_OPTION)
 
 all: $(FASTSCAPE_OBJ) LIB
 	make LIB
@@ -52,10 +59,11 @@ LIB: $(FASTSCAPE_OBJ)
 	ar rc libFastScape.a $(FASTSCAPE_OBJ)
 
 RUNF90: LIB
-	$(F90) -O $(F90_OPTIONS) FastScape_run.f90 -o FastScape_run_f90 -L. -lFastScape -L/usr/lib -llapack -L/usr/lib -lblas
+	$(F90) -O $(F90_OPTIONS) FastScape_run.f90 -o FastScape_run_f90 -L. -lFastScape $(LIB_OPTION)
+	$(F90) -O $(F90_OPTIONS) FastScape_run2.f90 -o FastScape_run2_f90 -L. -lFastScape $(LIB_OPTION)
 
 RUNC: LIB
-	$(CC) -O FastScape_run.c -o FastScape_run_c -L. -lFastScape -lgfortran -L/usr/lib -llapack -L/usr/lib -lblas
+	$(CC) -O FastScape_run.c -o FastScape_run_c -L. -lFastScape -lgfortran $(LIB_OPTION)
 
 clean:
 	rm *.o *.mod *.a

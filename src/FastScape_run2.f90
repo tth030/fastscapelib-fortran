@@ -15,16 +15,41 @@ double precision vexp, xpos, ypos, vel
 integer i,j,ij
 integer ierr
 
-nx=1025  !4097
-ny=513   !2049
+integer :: nx_used,ny_used,use_advection,advect_every_step
+double precision :: kf1_used,kf2_used,kd1_used,kd2_used,kds1_used,kds2_used
+character(len=50) :: inputtopofile
+
+open (1, file = 'inputfile', status = 'old')
+read(1,*) nx_used
+read(1,*) ny_used
+read(1,*) kf1_used
+read(1,*) kf2_used
+read(1,*) kd1_used
+read(1,*) kd2_used
+read(1,*) kds1_used
+read(1,*) kds2_used
+read(1,*) use_advection
+read(1,*) advect_every_step
+read(1,'(a)') inputtopofile
+close(1)
+
+write(*,*) 'Input topofile is ',inputtopofile
+
+nx=nx_used  !1025  !4097
+ny=ny_used  !513   !2049
 nn=nx*ny
 allocate (h(nn),h_init(nn),b(nn),u(nn),ux(nn),uy(nn),etot(nn),erate(nn),a(nn),chi(nn),catchment(nn),sedflux(nn),sedflux_shore(nn))
 
 call FastScape_Init(ierr);FSCAPE_CHKERR_ABORT(ierr)
 call FastScape_Set_NX_NY (nx,ny,ierr);FSCAPE_CHKERR_ABORT(ierr)
+call FastScape_Set_ADVECT_EVERY_STEP (advect_every_step,ierr);FSCAPE_CHKERR_ABORT(ierr)
 call FastScape_Setup(ierr);FSCAPE_CHKERR_ABORT(ierr)
-call FastScape_Use_Marine_Aggradation(.true.,ierr);FSCAPE_CHKERR_ABORT(ierr)
-call FastScape_Set_Marine_Aggradation_rate(-0.0001d0,ierr);FSCAPE_CHKERR_ABORT(ierr)
+
+!call FastScape_Use_Marine_Aggradation(.true.,ierr);FSCAPE_CHKERR_ABORT(ierr)
+!call FastScape_Set_Marine_Aggradation_rate(-0.0001d0,ierr);FSCAPE_CHKERR_ABORT(ierr)
+
+call FastScape_Set_Enforce_Marine_Mass_cons(.true.,ierr)
+
 xl=2400.d3
 yl=1200.d3
 dx=xl/(nx-1)
@@ -33,16 +58,14 @@ call FastScape_Set_XL_YL (xl,yl,ierr);FSCAPE_CHKERR_ABORT(ierr)
 dt=1.d3
 call FastScape_Set_DT (dt,ierr);FSCAPE_CHKERR_ABORT(ierr)
 allocate (kf1(nn),kd1(nn))
-kf1=1.d-10
-kf2=1.d-10
+kf1=kf1_used
+kf2=kf2_used
 !kf2=kf1
 m=0.4d0
 n=1.d0
 p_flow_dir_exp = -2.d0
-kd1=5.d-2
-kd2=0.d-2
-kd1 = 1.d-2
-kd2 = 0.d0
+kd1 = kd1_used
+kd2 = kd2_used
 !kd2=kd1
 g1=1.d0
 g2=1.d0
@@ -56,8 +79,8 @@ poro1 = 0.0d0
 poro2 = 0.0d0
 ratio = 0.5d0
 L = 0.5d2
-kds1 = 1.d-10
-kds2 = 1.d-10
+kds1 = kds1_used
+kds2 = kds2_used
 z1 = 2.d3
 z2 = 4.d3
 call FastScape_Set_Marine_Parameters (sealevel, poro1, poro2, z1, z2, ratio, L, kds1, kds2,ierr);FSCAPE_CHKERR_ABORT(ierr)
@@ -66,7 +89,7 @@ call FastScape_Set_BC (1111,ierr);FSCAPE_CHKERR_ABORT(ierr)
 
 ! Read initial topography
 call random_number (h)
-open (1, file = 'test.txt', status = 'old')
+open (1, file = inputtopofile, status = 'old')
 do i = 1,nn  
   read(1,*) h_init(i)
   h(i) = (h(i)-0.5d0)*0.25d0 + h_init(i)
@@ -103,10 +126,13 @@ call FastScape_Init_H (h,ierr);FSCAPE_CHKERR_ABORT(ierr)
 !    enddo
 !enddo
 
+
+if (use_advection==1) then
+
 u = 0.d0
 call FastScape_Set_U (u,ierr);FSCAPE_CHKERR_ABORT(ierr)
 
-vel = 1e-2 
+vel = 0.5e-2 
 uy  = 0.d0
 ux  = -vel
 do j=1,ny
@@ -130,8 +156,10 @@ do j=1,ny
 enddo
 call FastScape_Set_V (ux,uy,ierr);FSCAPE_CHKERR_ABORT(ierr)
 
-nstep=20 !30e3
-nfreq=1  !200 ! frequency of output
+endif
+
+nstep=30e3
+nfreq=200 ! frequency of output
 call FastScape_View(ierr);FSCAPE_CHKERR_ABORT(ierr)
 istep=0
 
@@ -182,6 +210,7 @@ call cpu_time (time_in)
     call random_number (h_init)
     h = h + (h_init-0.5d0)*0.25d0
     call FastScape_Set_H(h,ierr);FSCAPE_CHKERR_ABORT(ierr)
+    
   enddo
 call cpu_time (time_out)
 print*,'Total run time',time_out-time_in

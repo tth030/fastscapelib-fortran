@@ -24,6 +24,9 @@
 ! prints to standard output the value of nx,ny,nn,step,xl,yl,dt,K,m,n,kd,ibc
 ! as well as min, mean and max values of h and u
 
+! FastScape_Set_ADVECT_EVERY_STEP
+! sets the value of advect_every_step
+
 ! FastScape_Set_NX_NY (nx,ny)
 ! sets the value of nx and ny, the rectangular grid dimensions
 ! nx and ny are integer
@@ -249,6 +252,8 @@ subroutine FastScape_Execute_Step(ierr)
   double precision :: dtime_in, dtime_out
 
   ierr=0
+
+  totaltime = totaltime + dt
 
   if (runAdvect3d) then
     !call cpu_time (time_in)
@@ -608,6 +613,25 @@ subroutine FastScape_Copy_Lake_Depth(Lp,ierr)
   return
 
 end subroutine FastScape_Copy_Lake_Depth
+
+!--------------------------------------------------------------------------
+
+subroutine FastScape_Set_ADVECT_EVERY_STEP (every_step,ierr)
+
+  use FastScapeContext
+
+  implicit none
+
+  integer, intent(out):: ierr
+  integer, intent(in) :: every_step
+
+  ierr=0
+
+  call SetADVECTEVERYSTEP (every_step)
+
+  return
+
+end subroutine FastScape_Set_ADVECT_EVERY_STEP
 
 !--------------------------------------------------------------------------
 

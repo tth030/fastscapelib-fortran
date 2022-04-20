@@ -15,7 +15,7 @@ module FastScapeContext
   integer :: bounds_i1, bounds_i2, bounds_j1, bounds_j2
   logical :: bounds_xcyclic, bounds_ycyclic
   logical, dimension(:), allocatable :: bounds_bc
-  integer :: step
+  integer :: step, advect_every_step
   integer :: nGSStreamPowerLaw, nGSMarine
   logical :: setup_has_been_run, enforce_marine_mass_cons, low_sealevel_at_shallow_sea, use_marine_aggradation
   double precision, target, dimension(:), allocatable :: h,u,vx,vy,length,a,erate,etot,catch,catch0,b,precip,kf,kd
@@ -25,6 +25,7 @@ module FastScapeContext
   double precision, target, dimension(:), allocatable :: p_mfd_exp
   double precision, dimension(:,:), pointer, contiguous :: h2, vx2, vy2, u2, etot2, b2
   double precision :: xl, yl, dt, kfsed, m, n, kdsed, g1, g2, p
+  double precision :: totaltime,totaltime_before_advection
   double precision :: sealevel, poro1, poro2, zporo1, zporo2, ratio, layer, kdsea1, kdsea2
   integer, dimension(:), allocatable :: stack, ndon, rec
   integer, dimension(:,:), allocatable :: don
@@ -53,6 +54,9 @@ module FastScapeContext
     nx=0
     ny=0
     step=0
+    advect_every_step=1
+    totaltime=0.
+    totaltime_before_advection=0.
     setup_has_been_run = .false.
     timeSPL = 0.
     timeAdvect = 0.
@@ -390,6 +394,18 @@ module FastScapeContext
     return
 
   end subroutine View
+
+  !---------------------------------------------------------------
+
+  subroutine SetADVECTEVERYSTEP (every_step)
+
+    integer, intent(in) :: every_step
+
+    advect_every_step = every_step
+
+    return
+
+  end subroutine SetADVECTEVERYSTEP
 
   !---------------------------------------------------------------
 
