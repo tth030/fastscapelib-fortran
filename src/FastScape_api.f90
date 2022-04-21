@@ -267,10 +267,13 @@ subroutine FastScape_Execute_Step(ierr)
     timeAdvect3d = timeAdvect3d + dtime_out-dtime_in
   else
     if (runAdvect) then
-      call cpu_time (time_in)
-      call Advect (ierr)
-      call cpu_time (time_out)
-      timeAdvect = timeAdvect + time_out-time_in
+      !call cpu_time (time_in)
+      !call Advect (ierr)
+      !call cpu_time (time_out)
+      dtime_in = omp_get_wtime()
+      call Advect_p (ierr)
+      dtime_out = omp_get_wtime()
+      timeAdvect = timeAdvect + dtime_out-dtime_in
     endif
   
     if (runUplift) then

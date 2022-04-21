@@ -31,8 +31,8 @@ module FastScapeContext
   integer, dimension(:,:), allocatable :: don
   integer, dimension(:), allocatable :: rock_type ! 1 is basement, 2 is cont. sed, 3 is marine sed.
   logical :: runSPL, runAdvect, runAdvect3d, runDiffusion, runStrati, runUplift, runMarine
-  real :: timeSPL, timeAdvect, timeDiffusion, timeStrati, timeUplift, timeMarine
-  double precision :: timeAdvect3d
+  real :: timeSPL, timeDiffusion, timeStrati, timeUplift, timeMarine
+  double precision :: timeAdvect3d, timeAdvect
   double precision, dimension(:,:), allocatable :: reflector
   double precision, dimension(:,:,:), allocatable :: fields
   integer nfield, nfreq, nreflector, nfreqref, ireflector
@@ -639,8 +639,8 @@ module FastScapeContext
     double precision, intent(in) :: ux(*),uy(*)
     integer i
 
-    !runAdvect = .true.
-    runAdvect3d = .true.
+    runAdvect = .true.
+    !runAdvect3d = .true.
 
     do i=1,nn
       vx(i) = ux(i)

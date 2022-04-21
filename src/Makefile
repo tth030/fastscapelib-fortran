@@ -36,6 +36,7 @@ StreamPowerLaw.o \
 Diffusion.o \
 LocalMinima.o \
 Advect.o \
+Advect_p.o \
 Advect3d.o \
 Advect3d_p.o \
 Advect3d_2.o \
