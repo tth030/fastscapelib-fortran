@@ -272,6 +272,7 @@ subroutine FastScape_Execute_Step(ierr)
       !call cpu_time (time_out)
       dtime_in = omp_get_wtime()
       call Advect_p (ierr)
+      !call Advect (ierr)
       dtime_out = omp_get_wtime()
       timeAdvect = timeAdvect + dtime_out-dtime_in
     endif

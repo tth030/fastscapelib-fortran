@@ -11,7 +11,7 @@ subroutine Advect_p (ierr)
 
   double precision, dimension(:), allocatable :: diag,sup,inf,rhs,res
   double precision, dimension(:,:), allocatable :: h_used, b_used, etot_used, vx_used, vy_used
-  double precision dx,dy
+  double precision dx,dy,advect_dt
   integer i,j, nx_used, ny_used, multiplicator
   integer ierr
 
@@ -22,10 +22,19 @@ subroutine Advect_p (ierr)
 
   !print*,'Advect'
 
-  multiplicator = 1
+  multiplicator = 2
 
   dx=xl/(nx-1)
   dy=yl/(ny-1)
+  !advect_dt=advect_every_step*dt
+  ! Useful if dt is variable
+  advect_dt=totaltime-totaltime_before_advection
+
+  if (mod(step,advect_every_step)==0 .and. step/=0) then
+
+!  write(*,'(a,x,i6,x,f9.3,x,f13.3,x,f13.3)') 'Advection 3d step,advect_dt',step,advect_dt,totaltime,totaltime_before_advection
+
+  totaltime_before_advection=totaltime
 
   if ( multiplicator <= 1 ) then
     nx_used = nx
@@ -39,8 +48,8 @@ subroutine Advect_p (ierr)
     vx_used   = vx2
     vy_used   = vy2
   else
-    nx_used = (nx-1)*multiplicator
-    ny_used = (ny-1)*multiplicator
+    nx_used = (nx-1)*multiplicator+1
+    ny_used = (ny-1)*multiplicator+1
     allocate(h_used(nx_used,ny_used),b_used(nx_used,ny_used),etot_used(nx_used,ny_used),vx_used(nx_used,ny_used),vy_used(nx_used,ny_used))
     dx_used = xl/(nx_used-1)
     dy_used = yl/(ny_used-1)
@@ -54,20 +63,65 @@ subroutine Advect_p (ierr)
       dxx = (i-1)*dx_used - (ii-1)*dx
       dyy = (j-1)*dy_used - (jj-1)*dy
 
-      deltafx        = h2(ii+1,jj) - h2(ii,jj) ; deltafy = h2(ii,jj+1) - h2(ii,jj) ; deltafxy = h2(ii,jj) + h2(ii+1,jj+1) - h2(ii+1,jj) - h2(ii,jj+1)
-      h_used(i,j)    = deltafx*(dxx/dx_used) + deltafy*(dyy/dy_used) + deltafxy*(dxx*dyy/(dx_used*dy_used)) + h2(ii,jj)
+      if (ii==nx) then
+        deltafx        = 0.d0 ; deltafxy = 0.d0 ;
+        if (jj==ny) then
+          h_used(i,j) = h2(ii,jj)
+          b_used(i,j) = b2(ii,jj)
+          etot_used(i,j) = etot2(ii,jj)
+          vx_used(i,j) = vx2(ii,jj)
+          vy_used(i,j) = vy2(ii,jj)
+        else
+          deltafy = h2(ii,jj+1) - h2(ii,jj)
+          h_used(i,j)    = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + h2(ii,jj)
+    
+          deltafy = b2(ii,jj+1) - b2(ii,jj)
+          b_used(i,j)    = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + b2(ii,jj)
+    
+          deltafy = etot2(ii,jj+1) - etot2(ii,jj)
+          etot_used(i,j) = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + etot2(ii,jj)
+    
+          deltafy = vx2(ii,jj+1) - vx2(ii,jj)
+          vx_used(i,j)   = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + vx2(ii,jj)
+    
+          deltafy = vy2(ii,jj+1) - vy2(ii,jj)
+          vy_used(i,j)   = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + vy2(ii,jj)
+        endif
+       
+      else
+        if (jj==ny) then
+          deltafy = 0.d0 ; deltafxy = 0.d0 ;
+          deltafx        = h2(ii+1,jj) - h2(ii,jj)
+          h_used(i,j)    = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + h2(ii,jj)
 
-      deltafx        = b2(ii+1,jj) - b2(ii,jj) ; deltafy = b2(ii,jj+1) - b2(ii,jj) ; deltafxy = b2(ii,jj) + b2(ii+1,jj+1) - b2(ii+1,jj) - b2(ii,jj+1)
-      b_used(i,j)    = deltafx*(dxx/dx_used) + deltafy*(dyy/dy_used) + deltafxy*(dxx*dyy/(dx_used*dy_used)) + b2(ii,jj)
+          deltafx        = b2(ii+1,jj) - b2(ii,jj)
+          b_used(i,j)    = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + b2(ii,jj)
 
-      deltafx        = etot2(ii+1,jj) - etot2(ii,jj) ; deltafy = etot2(ii,jj+1) - etot2(ii,jj) ; deltafxy = etot2(ii,jj) + etot2(ii+1,jj+1) - etot2(ii+1,jj) - etot2(ii,jj+1)
-      etot_used(i,j) = deltafx*(dxx/dx_used) + deltafy*(dyy/dy_used) + deltafxy*(dxx*dyy/(dx_used*dy_used)) + etot2(ii,jj)
+          deltafx        = etot2(ii+1,jj) - etot2(ii,jj)
+          etot_used(i,j) = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + etot2(ii,jj)
 
-      deltafx        = vx2(ii+1,jj) - vx2(ii,jj) ; deltafy = vx2(ii,jj+1) - vx2(ii,jj) ; deltafxy = vx2(ii,jj) + vx2(ii+1,jj+1) - vx2(ii+1,jj) - vx2(ii,jj+1)
-      vx_used(i,j)   = deltafx*(dxx/dx_used) + deltafy*(dyy/dy_used) + deltafxy*(dxx*dyy/(dx_used*dy_used)) + vx2(ii,jj)
+          deltafx        = vx2(ii+1,jj) - vx2(ii,jj)
+          vx_used(i,j)   = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + vx2(ii,jj)
 
-      deltafx        = vy2(ii+1,jj) - vy2(ii,jj) ; deltafy = vy2(ii,jj+1) - vy2(ii,jj) ; deltafxy = vy2(ii,jj) + vy2(ii+1,jj+1) - vy2(ii+1,jj) - vy2(ii,jj+1)
-      vy_used(i,j)   = deltafx*(dxx/dx_used) + deltafy*(dyy/dy_used) + deltafxy*(dxx*dyy/(dx_used*dy_used)) + vy2(ii,jj)
+          deltafx        = vy2(ii+1,jj) - vy2(ii,jj)
+          vy_used(i,j)   = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + vy2(ii,jj)
+        else
+          deltafx        = h2(ii+1,jj) - h2(ii,jj) ; deltafy = h2(ii,jj+1) - h2(ii,jj) ; deltafxy = h2(ii,jj) + h2(ii+1,jj+1) - h2(ii+1,jj) - h2(ii,jj+1)
+          h_used(i,j)    = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + h2(ii,jj)
+    
+          deltafx        = b2(ii+1,jj) - b2(ii,jj) ; deltafy = b2(ii,jj+1) - b2(ii,jj) ; deltafxy = b2(ii,jj) + b2(ii+1,jj+1) - b2(ii+1,jj) - b2(ii,jj+1)
+          b_used(i,j)    = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + b2(ii,jj)
+    
+          deltafx        = etot2(ii+1,jj) - etot2(ii,jj) ; deltafy = etot2(ii,jj+1) - etot2(ii,jj) ; deltafxy = etot2(ii,jj) + etot2(ii+1,jj+1) - etot2(ii+1,jj) - etot2(ii,jj+1)
+          etot_used(i,j) = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + etot2(ii,jj)
+    
+          deltafx        = vx2(ii+1,jj) - vx2(ii,jj) ; deltafy = vx2(ii,jj+1) - vx2(ii,jj) ; deltafxy = vx2(ii,jj) + vx2(ii+1,jj+1) - vx2(ii+1,jj) - vx2(ii,jj+1)
+          vx_used(i,j)   = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + vx2(ii,jj)
+    
+          deltafx        = vy2(ii+1,jj) - vy2(ii,jj) ; deltafy = vy2(ii,jj+1) - vy2(ii,jj) ; deltafxy = vy2(ii,jj) + vy2(ii+1,jj+1) - vy2(ii+1,jj) - vy2(ii,jj+1)
+          vy_used(i,j)   = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + vy2(ii,jj)
+        endif
+      endif
     enddo
     !$omp end parallel do
   endif
@@ -84,11 +138,11 @@ subroutine Advect_p (ierr)
 
     do i=1,nx_used
       if (vx_used(i,j).gt.0.d0) then
-        diag(i)=1.d0+vx_used(i,j)*dt/dx_used
-        inf(i)=-vx_used(i,j)*dt/dx_used
+        diag(i)=1.d0+vx_used(i,j)*advect_dt/dx_used
+        inf(i)=-vx_used(i,j)*advect_dt/dx_used
       elseif (vx_used(i,j).lt.0.d0) then
-        diag(i)=1.d0-vx_used(i,j)*dt/dx_used
-        sup(i)=vx_used(i,j)*dt/dx_used
+        diag(i)=1.d0-vx_used(i,j)*advect_dt/dx_used
+        sup(i)=vx_used(i,j)*advect_dt/dx_used
       endif
     enddo
     sup(1)=0.d0
@@ -124,11 +178,11 @@ subroutine Advect_p (ierr)
 
     do j=1,ny_used
       if (vy_used(i,j).gt.0.d0) then
-        diag(j)=1.d0+vy_used(i,j)*dt/dy_used
-        inf(j)=-vy_used(i,j)*dt/dy_used
+        diag(j)=1.d0+vy_used(i,j)*advect_dt/dy_used
+        inf(j)=-vy_used(i,j)*advect_dt/dy_used
       elseif (vy_used(i,j).lt.0.d0) then
-        diag(j)=1.d0-vy_used(i,j)*dt/dy_used
-        sup(j)=vy_used(i,j)*dt/dy_used
+        diag(j)=1.d0-vy_used(i,j)*advect_dt/dy_used
+        sup(j)=vy_used(i,j)*advect_dt/dy_used
       endif
     enddo
     sup(1)=0.d0
@@ -171,6 +225,8 @@ subroutine Advect_p (ierr)
   b=min(b,h)
 
   deallocate(h_used,b_used,etot_used,vx_used,vy_used)
+
+  endif ! if (mod(step,advect_every_step)==0)
 
   return
   end subroutine Advect_p
