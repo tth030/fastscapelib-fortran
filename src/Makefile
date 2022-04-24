@@ -39,6 +39,7 @@ Advect.o \
 Advect_p.o \
 Advect3d.o \
 Advect3d_p.o \
+Advect3d_lag.o \
 Advect3d_2.o \
 Advect3d_3.o \
 Marine.o \

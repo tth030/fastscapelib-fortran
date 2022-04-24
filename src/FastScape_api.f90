@@ -250,6 +250,7 @@ subroutine FastScape_Execute_Step(ierr)
   integer, intent(out):: ierr
   real :: time_in, time_out
   double precision :: dtime_in, dtime_out
+  double precision, dimension(:), allocatable :: h_before_sp, b_before_sp, etot_before_sp, erate_before_sp
 
   ierr=0
 
@@ -262,7 +263,11 @@ subroutine FastScape_Execute_Step(ierr)
     !!call Advect3d_3 (ierr)
     !call cpu_time (time_out)
     dtime_in = omp_get_wtime()
-    call Advect3d_p (ierr)
+    if (runLagToEul) then
+      call Advect3d_lag (ierr)
+    else
+      call Advect3d_p (ierr)
+    endif
     dtime_out = omp_get_wtime()
     timeAdvect3d = timeAdvect3d + dtime_out-dtime_in
   else
@@ -283,6 +288,14 @@ subroutine FastScape_Execute_Step(ierr)
       call cpu_time (time_out)
       timeUplift = timeUplift + time_out-time_in
     endif
+  endif
+  
+  if (runAdvect3d .and. runLagToEul) then
+    allocate(h_before_sp(nn),b_before_sp(nn),etot_before_sp(nn),erate_before_sp(nn))
+    h_before_sp     = h
+    b_before_sp     = b
+    etot_before_sp  = etot
+    erate_before_sp = erate
   endif
 
   if (runSPL) then
@@ -323,6 +336,14 @@ subroutine FastScape_Execute_Step(ierr)
      call Run_Strati ()
      call cpu_time (time_out)
      timeStrati = timeStrati + time_out-time_in
+  endif
+
+  if (runAdvect3d .and. runLagToEul)  then
+     dtime_in = omp_get_wtime()
+     call EulToLag (h_before_sp,b_before_sp,etot_before_sp,erate_before_sp,ierr)
+     deallocate(h_before_sp,b_before_sp,etot_before_sp,erate_before_sp)
+     dtime_out = omp_get_wtime()
+     timeEulToLag = timeEulToLag + dtime_out-dtime_in
   endif
 
   step=step+1
@@ -1112,6 +1133,25 @@ call SetEnforceMarineMassCons (enforce_marine_mass_consp)
 return
 
 end subroutine FastScape_Set_Enforce_Marine_Mass_cons
+
+!--------------------------------------------------------------------------
+
+subroutine FastScape_Set_RunLagToEul (runLagToEulp,ierr)
+
+use FastScapeContext
+
+implicit none
+
+integer, intent(out):: ierr
+logical, intent(in) :: runLagToEulp
+
+ierr=0
+
+call SetRunLagToEul (runLagToEulp)
+
+return
+
+end subroutine FastScape_Set_RunLagToEul
 
 !--------------------------------------------------------------------------
 

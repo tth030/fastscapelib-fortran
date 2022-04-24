@@ -14,10 +14,11 @@ subroutine Marine(ierr)
   integer, dimension(:), allocatable :: flag,mmnrec,mmstack
   integer, dimension(:,:), allocatable :: mmrec
   double precision, dimension(:,:), allocatable :: mmwrec,mmlrec
-  double precision shelfslope,ratio1,ratio2,dx,dy,f_mass_cons
+  double precision shelfslope,ratio1,ratio2,dx,dy,f_mass_cons,f_mass_cons_deep
   integer ij,ijr,ijk,k
   integer, intent(inout):: ierr
-
+  
+  double precision, dimension(:), allocatable :: dh_above, dh_below
   !TT make the marine diffusion sequential ------
   character cbc*4
   ! define other parameters
@@ -459,7 +460,12 @@ subroutine Marine(ierr)
   dh2=((h-ht)*(1.d0-Fmix)+layer*(Fmixt-Fmix))*(1.d0-poro2)
   dh=dh1+dh2
 
-  !write(*,*)'after diffusion and before enforce_marine_mass_cons'
+  if (enforce_marine_no_erosion .and. any(dh<0.d0)) then
+    where (dh.lt.0.d0) dh = 0.d0
+    where (dh1.lt.0.d0) dh1 = 0.d0
+    where (dh2.lt.0.d0) dh2 = 0.d0
+    write(*,*) 'enforce_marine_no_erosion has been activated'
+  endif
 
   ! compute whether Marine diffusion was mass conserving. This might not be the case in basins
   ! with a lot of "underwater" topgraphy and little sediment input
@@ -467,16 +473,42 @@ subroutine Marine(ierr)
   if (enforce_marine_mass_cons) then
      f_mass_cons = sum(dh)/(sum(flux/(ratio1+ratio2))*dt)
      if ((sum(flux)*dt) > 0.d0 .and. f_mass_cons > 1.0d0) then
-         dh = dh/f_mass_cons
+         write(*,*)'Too much marine deposits with a factor f_mass_cons compared to sed flux = ',f_mass_cons
+         allocate(dh_above(nn),dh_below(nn))
+         dh_above = dh
+         dh_below = dh
+         !we mostly remove sediments deeper then 50 m
+         where (h.le.(sealevel-50)) dh_above=0.d0
+         where (h.gt.(sealevel-50)) dh_below=0.d0
+         f_mass_cons_deep = sum(dh_below) / ((sum(dh)/f_mass_cons) - sum(dh_above))
+         if (f_mass_cons_deep>0) then
+           where (h.le.(sealevel-50)) dh=dh/f_mass_cons_deep
+           write(*,*)'Scaled marine deposits down according to f_mass_cons = ',f_mass_cons_deep, ' for sediments deeper than 50 m'
+         else
+           write(*,*) '50 m f_mass_cons_deep is < 0 ',f_mass_cons_deep
+           dh_above = dh
+           dh_below = dh
+           !we mostly remove sediments deeper then 25 m
+           where (h.le.(sealevel-25)) dh_above=0.d0
+           where (h.gt.(sealevel-25)) dh_below=0.d0
+           f_mass_cons_deep = sum(dh_below) / ((sum(dh)/f_mass_cons) - sum(dh_above))
+           if (f_mass_cons_deep>0) then
+             where (h.le.(sealevel-25)) dh=dh/f_mass_cons_deep
+             write(*,*)'Scaled marine deposits down according to f_mass_cons = ',f_mass_cons_deep, ' for sediments deeper than 25 m'
+           else
+             write(*,*) '25 m f_mass_cons_deep is < 0 ',f_mass_cons_deep
+             dh = dh/f_mass_cons
+             write(*,*)'Scaled marine deposits down according to f_mass_cons = ',f_mass_cons
+           endif
+         endif
+         deallocate(dh_above,dh_below)
+         !dh = dh/f_mass_cons
          h = ht + dh
-         write(*,*)'Scaled marine deposits down according to f_mass_cons = ',f_mass_cons
      endif
      if ((sum(flux)*dt) > 0.d0 .and. f_mass_cons < 1.d0) then
          write(*,*)'Mass lost during marine diffusion: f_mass_cons = ',f_mass_cons
      endif
   endif
-
-  !write(*,*)'after enforce_marine_mass_cons'
 
   ! store deposited material in dh_dep to be able to transfer this value to coupled thermo-mechanical code
   ! where compaction can be applied if necessary.

@@ -7,8 +7,23 @@ module FastScapeContext
   ! should not be accessed or changed
   ! see API for name of routines and externally accessible variables
   use FastScapeErrorCodes
-
+  
   implicit none
+ 
+  type cloud
+    double precision, dimension(:), allocatable  :: x,y,h,b,etot,erate
+    integer, dimension(:), allocatable           :: icx,icy
+    integer, dimension(:), allocatable           :: cell
+    logical, dimension(:), allocatable           :: active
+    integer                                      :: npcl
+  end type cloud 
+
+  type FEgrid
+    double precision, dimension(:), allocatable         :: x,y
+    integer, dimension(:), allocatable                  :: nn
+    integer, dimension(:,:), allocatable                :: icon,pair
+    integer                                             :: nmax, nmin
+  end type FEgrid
 
   integer :: nx, ny, nn, nstack
   integer :: bounds_ibc
@@ -17,7 +32,8 @@ module FastScapeContext
   logical, dimension(:), allocatable :: bounds_bc
   integer :: step, advect_every_step
   integer :: nGSStreamPowerLaw, nGSMarine
-  logical :: setup_has_been_run, enforce_marine_mass_cons, low_sealevel_at_shallow_sea, use_marine_aggradation
+  logical :: setup_has_been_run, enforce_marine_mass_cons, enforce_marine_no_erosion
+  logical :: low_sealevel_at_shallow_sea, use_marine_aggradation
   double precision, target, dimension(:), allocatable :: h,u,vx,vy,length,a,erate,etot,catch,catch0,b,precip,kf,kd
   double precision, target, dimension(:), allocatable :: Sedflux, Fmix
   double precision, target, dimension(:), allocatable :: g
@@ -30,9 +46,9 @@ module FastScapeContext
   integer, dimension(:), allocatable :: stack, ndon, rec
   integer, dimension(:,:), allocatable :: don
   integer, dimension(:), allocatable :: rock_type ! 1 is basement, 2 is cont. sed, 3 is marine sed.
-  logical :: runSPL, runAdvect, runAdvect3d, runDiffusion, runStrati, runUplift, runMarine
+  logical :: runSPL, runAdvect, runAdvect3d, runDiffusion, runStrati, runUplift, runMarine, runLagToEul
   real :: timeSPL, timeDiffusion, timeStrati, timeUplift, timeMarine
-  double precision :: timeAdvect3d, timeAdvect
+  double precision :: timeAdvect3d, timeAdvect, timeEulToLag
   double precision, dimension(:,:), allocatable :: reflector
   double precision, dimension(:,:,:), allocatable :: fields
   integer nfield, nfreq, nreflector, nfreqref, ireflector
@@ -45,6 +61,45 @@ module FastScapeContext
   double precision :: atol_SPL
   double precision :: marine_aggradation_rate
 
+  type (cloud)     :: cl
+  type (FEgrid)    :: grid
+
+  interface array_append
+     subroutine array_append_dp(a,a_append)
+     implicit none
+     double precision,allocatable,dimension(:):: a,a_append
+     end subroutine array_append_dp
+     
+     subroutine array_append_i(a,a_append)
+     implicit none
+     integer,allocatable,dimension(:):: a,a_append
+     end subroutine array_append_i
+
+     subroutine array_append_b(a,a_append)
+     implicit none
+     logical,allocatable,dimension(:):: a,a_append
+     end subroutine array_append_b
+  end interface array_append
+
+  interface array_trim
+     subroutine array_trim_dp(array,mask)
+       implicit none
+       double precision,allocatable :: array(:)
+       logical :: mask(:)
+     end subroutine array_trim_dp
+   
+     subroutine array_trim_i(array,mask)
+       implicit none
+       integer,allocatable :: array(:)
+       logical :: mask(:)
+     end subroutine array_trim_i
+
+     subroutine array_trim_b(array,mask)
+       implicit none
+       logical, allocatable :: array(:)
+       logical :: mask(:)
+     end subroutine array_trim_b
+  end interface array_trim
 
   contains
 
@@ -61,6 +116,7 @@ module FastScapeContext
     timeSPL = 0.
     timeAdvect = 0.
     timeAdvect3d = 0.
+    timeEulToLag = 0.
     timeDiffusion = 0.
     timeStrati = 0.
     timeMarine = 0.
@@ -116,11 +172,13 @@ module FastScapeContext
     runSPL = .false.
     runAdvect = .false.
     runAdvect3d = .false.
+    runLagToEul = .false.
     runDiffusion = .false.
     runStrati = .false.
     runMarine = .false.
     runUplift = .false.
 
+    enforce_marine_no_erosion = .true.
     enforce_marine_mass_cons = .false.
     low_sealevel_at_shallow_sea = .false.
     use_marine_aggradation = .false.
@@ -571,6 +629,7 @@ module FastScapeContext
     if (runMarine) write (*,*) 'Marine:',timeMarine
     if (runAdvect3d) then
       write (*,*) 'Advection3d:',timeAdvect3d
+      if (runLagToEul) write (*,*) 'EulToLag:',timeEulToLag
     else
       if (runAdvect) write (*,*) 'Advection:',timeAdvect
       if (runUplift) write (*,*) 'Uplift:',timeUplift
@@ -639,8 +698,8 @@ module FastScapeContext
     double precision, intent(in) :: ux(*),uy(*)
     integer i
 
-    runAdvect = .true.
-    !runAdvect3d = .true.
+    !runAdvect = .true.
+    runAdvect3d = .true.
 
     do i=1,nn
       vx(i) = ux(i)
@@ -967,6 +1026,18 @@ module FastScapeContext
 
     !---------------------------------------------------------------
 
+    subroutine SetRunLagToEul (runLagToEulp)
+
+    logical, intent(in) :: runLagToEulp
+
+    runLagToEul = runLagToEulp
+
+    return
+
+    end subroutine SetRunLagToEul
+
+    !---------------------------------------------------------------
+
     subroutine SetCorrectShallowSealevel (low_sealevel_at_shallow_seap)
 
     logical, intent(in) :: low_sealevel_at_shallow_seap
@@ -1176,5 +1247,181 @@ module FastScapeContext
     end if
     
     end function kernel_p
-    
+
+    !---------------------------------------------------------------
+
   end module FastScapeContext
+
+
+
+    !this subroutine is a wrapper of a=[a,b], dealing with allocation etc.
+    !For some new compilers, the matlab-like syntax a=[a,b] can be directly used.
+    subroutine array_append_dp(a,a_append)
+      implicit none
+      double precision,allocatable,dimension(:):: a,a_append
+      double precision,allocatable,dimension(:):: a_new
+      integer:: n1,n2,nnew
+      
+      if (.not. allocated(a)) stop 'a not allocated!'
+      if (.not. allocated(a_append)) stop 'a_append not allocated!'
+      
+      n1 = size(a)
+      n2 = size(a_append)
+      nnew = n1+n2
+      allocate(a_new(nnew))
+      
+      !a_new = [a,a_append]
+      a_new(1:n1)=a
+      a_new((n1+1):(n1+n2))=a_append
+      
+      
+      deallocate(a)
+      allocate(a(nnew))
+      a = a_new
+      
+      deallocate(a_new)
+    end subroutine array_append_dp
+
+    !---------------------------------------------------------------
+    
+    subroutine array_append_i(a,a_append)
+      implicit none
+      integer,allocatable,dimension(:):: a,a_append
+      integer,allocatable,dimension(:):: a_new
+      integer:: n1,n2,nnew
+      
+      if (.not. allocated(a)) stop 'a not allocated!'
+      if (.not. allocated(a_append)) stop 'a_append not allocated!'
+      
+      n1 = size(a)
+      n2 = size(a_append)
+      nnew = n1+n2
+      allocate(a_new(nnew))
+      
+      !a_new = [a,a_append]
+      a_new(1:n1)=a
+      a_new((n1+1):(n1+n2))=a_append
+      
+      deallocate(a)
+      allocate(a(nnew))
+      a = a_new
+      
+      deallocate(a_new)
+    end subroutine array_append_i
+
+    !---------------------------------------------------------------
+    
+    subroutine array_append_b(a,a_append)
+      implicit none
+      logical,allocatable,dimension(:):: a,a_append
+      logical,allocatable,dimension(:):: a_new
+      integer:: n1,n2,nnew
+      
+      if (.not. allocated(a)) stop 'a not allocated!'
+      if (.not. allocated(a_append)) stop 'a_append not allocated!'
+      
+      n1 = size(a)
+      n2 = size(a_append)
+      nnew = n1+n2
+      allocate(a_new(nnew))
+      
+      !a_new = [a,a_append]
+      a_new(1:n1)=a
+      a_new((n1+1):(n1+n2))=a_append
+      
+      deallocate(a)
+      allocate(a(nnew))
+      a = a_new
+      
+      deallocate(a_new)
+    end subroutine array_append_b
+
+    !---------------------------------------------------------------
+
+    subroutine array_trim_dp(array,mask)
+      implicit none
+      double precision,allocatable :: array(:)
+      logical :: mask(:)
+      integer :: nnew
+      integer :: counter
+      integer :: i
+      double precision,allocatable :: swap(:)
+    
+      nnew = count(mask)
+      allocate(swap(nnew))
+    
+      counter=0
+      do i=1,size(array)
+         if (mask(i)) then
+            counter=counter+1
+            swap(counter) = array(i)
+         endif
+      enddo
+    
+      deallocate(array)
+      allocate(array(nnew))
+    
+      array = swap
+    
+      deallocate(swap)
+    
+    end subroutine array_trim_dp
+  
+    subroutine array_trim_i(array,mask)
+      implicit none
+      integer,allocatable :: array(:)
+      logical :: mask(:)
+      integer :: nnew
+      integer :: counter
+      integer :: i
+      integer,allocatable :: swap(:)
+    
+      nnew = count(mask)
+      allocate(swap(nnew))
+    
+      counter=0
+      do i=1,size(array)
+         if (mask(i)) then
+            counter=counter+1
+            swap(counter) = array(i)
+         endif
+      enddo
+    
+      deallocate(array)
+      allocate(array(nnew))
+    
+      array = swap
+    
+      deallocate(swap)
+    
+    end subroutine array_trim_i
+  
+    subroutine array_trim_b(array,mask)
+      implicit none
+      logical, allocatable :: array(:)
+      logical :: mask(:)
+      integer :: nnew
+      integer :: counter
+      integer :: i
+      logical, allocatable :: swap(:)
+    
+      nnew = count(mask)
+      allocate(swap(nnew))
+    
+      counter=0
+      do i=1,size(array)
+         if (mask(i)) then
+            counter=counter+1
+            swap(counter) = array(i)
+         endif
+      enddo
+    
+      deallocate(array)
+      allocate(array(nnew))
+    
+      array = swap
+    
+      deallocate(swap)
+    
+    end subroutine array_trim_b
+    
