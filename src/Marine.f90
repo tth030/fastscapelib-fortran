@@ -14,7 +14,7 @@ subroutine Marine(ierr)
   integer, dimension(:), allocatable :: flag,mmnrec,mmstack
   integer, dimension(:,:), allocatable :: mmrec
   double precision, dimension(:,:), allocatable :: mmwrec,mmlrec
-  double precision shelfslope,ratio1,ratio2,dx,dy,f_mass_cons,f_mass_cons_deep
+  double precision shelfslope,ratio1,ratio2,dx,dy,f_mass_cons,f_mass_cons_deep,sed_above_sealevel
   integer ij,ijr,ijk,k
   integer, intent(inout):: ierr
   
@@ -461,10 +461,31 @@ subroutine Marine(ierr)
   dh=dh1+dh2
 
   if (enforce_marine_no_erosion .and. any(dh<0.d0)) then
-    where (dh.lt.0.d0) dh = 0.d0
-    where (dh1.lt.0.d0) dh1 = 0.d0
-    where (dh2.lt.0.d0) dh2 = 0.d0
-    write(*,*) 'enforce_marine_no_erosion has been activated'
+    !debug
+    !allocate(dh_above(nn))
+    !dh_above = dh
+    where (dh.lt.0.d0 .and. (ht+dh).lt.sealevel-50) dh = 0.d0
+    where (dh1.lt.0.d0 .and. (ht+dh).lt.sealevel-50) dh1 = 0.d0
+    where (dh2.lt.0.d0 .and. (ht+dh).lt.sealevel-50) dh2 = 0.d0
+    !totaleroded_check = sum(dh-dh_above)
+    !write(*,'(a,F13.4)') 'totaleroded_check    = ',totaleroded_check
+    !deallocate(dh_above)
+    h = ht + dh
+    dh1=((h-ht)*Fmix+layer*(Fmix-Fmixt))*(1.d0-poro1)
+    dh2=((h-ht)*(1.d0-Fmix)+layer*(Fmixt-Fmix))*(1.d0-poro2)
+  endif
+
+  if (enforce_marine_sed_below_sealevel) then
+    !TT Should not have sediments above sealevel after diffusion
+    allocate(dh_above(nn))
+    dh_above = dh
+    where ( ht.le.sealevel .and. (ht+dh) .gt. sealevel ) dh = sealevel - ht
+    sed_above_sealevel = sum(dh_above-dh)
+    write(*,'(a,F13.4,a)') '  --> correction of sediments above sealevel, volume ~ ',sed_above_sealevel,' m'
+    deallocate(dh_above)
+    h = ht + dh
+    dh1=((h-ht)*Fmix+layer*(Fmix-Fmixt))*(1.d0-poro1)
+    dh2=((h-ht)*(1.d0-Fmix)+layer*(Fmixt-Fmix))*(1.d0-poro2)
   endif
 
   ! compute whether Marine diffusion was mass conserving. This might not be the case in basins
@@ -473,7 +494,7 @@ subroutine Marine(ierr)
   if (enforce_marine_mass_cons) then
      f_mass_cons = sum(dh)/(sum(flux/(ratio1+ratio2))*dt)
      if ((sum(flux)*dt) > 0.d0 .and. f_mass_cons > 1.0d0) then
-         write(*,*)'Too much marine deposits with a factor f_mass_cons compared to sed flux = ',f_mass_cons
+!         write(*,*)'Too much marine deposits with a factor f_mass_cons compared to sed flux = ',f_mass_cons
          allocate(dh_above(nn),dh_below(nn))
          dh_above = dh
          dh_below = dh
@@ -483,9 +504,9 @@ subroutine Marine(ierr)
          f_mass_cons_deep = sum(dh_below) / ((sum(dh)/f_mass_cons) - sum(dh_above))
          if (f_mass_cons_deep>0) then
            where (h.le.(sealevel-50)) dh=dh/f_mass_cons_deep
-           write(*,*)'Scaled marine deposits down according to f_mass_cons = ',f_mass_cons_deep, ' for sediments deeper than 50 m'
+           write(*,'(a,F14.3,a)')'Scaled marine deposits down according to f_mass_cons = ',f_mass_cons_deep, ' for sediments deeper than 50 m'
          else
-           write(*,*) '50 m f_mass_cons_deep is < 0 ',f_mass_cons_deep
+           write(*,'(a,F14.3)') '50 m f_mass_cons_deep is < 0 ',f_mass_cons_deep
            dh_above = dh
            dh_below = dh
            !we mostly remove sediments deeper then 25 m
@@ -494,20 +515,30 @@ subroutine Marine(ierr)
            f_mass_cons_deep = sum(dh_below) / ((sum(dh)/f_mass_cons) - sum(dh_above))
            if (f_mass_cons_deep>0) then
              where (h.le.(sealevel-25)) dh=dh/f_mass_cons_deep
-             write(*,*)'Scaled marine deposits down according to f_mass_cons = ',f_mass_cons_deep, ' for sediments deeper than 25 m'
+             write(*,'(a,F13.4,a)')'Scaled marine deposits down according to f_mass_cons = ',f_mass_cons_deep, ' for sediments deeper than 25 m'
            else
-             write(*,*) '25 m f_mass_cons_deep is < 0 ',f_mass_cons_deep
+             write(*,'(a,F14.3)') '25 m f_mass_cons_deep is < 0 ',f_mass_cons_deep
              dh = dh/f_mass_cons
-             write(*,*)'Scaled marine deposits down according to f_mass_cons = ',f_mass_cons
+             write(*,'(a,F14.3)')'Scaled marine deposits down according to f_mass_cons = ',f_mass_cons
            endif
          endif
          deallocate(dh_above,dh_below)
-         !dh = dh/f_mass_cons
          h = ht + dh
+         dh1=((h-ht)*Fmix+layer*(Fmix-Fmixt))*(1.d0-poro1)
+         dh2=((h-ht)*(1.d0-Fmix)+layer*(Fmixt-Fmix))*(1.d0-poro2)
+         dh=dh1+dh2
+         f_mass_cons = sum(dh)/(sum(flux/(ratio1+ratio2))*dt)
+         write(*,'(a,F7.3)')'After correction f_mass_cons =',f_mass_cons
+     else if ((sum(flux)*dt) > 0.d0 .and. f_mass_cons < 1.d0) then
+         write(*,'(a,F14.3)')'Mass lost during marine diffusion: f_mass_cons = ',f_mass_cons
      endif
-     if ((sum(flux)*dt) > 0.d0 .and. f_mass_cons < 1.d0) then
-         write(*,*)'Mass lost during marine diffusion: f_mass_cons = ',f_mass_cons
-     endif
+  else
+    f_mass_cons = sum(dh)/(sum(flux/(ratio1+ratio2))*dt)
+    if ((sum(flux)*dt) > 0.d0 .and. f_mass_cons > 1.0d0) then
+      write(*,'(a,F14.3)') 'Mass gain during marine diffusion: f_mass_cons = ',f_mass_cons
+    else if ((sum(flux)*dt) > 0.d0 .and. f_mass_cons < 1.d0) then
+      write(*,'(a,F14.3)') 'Mass lost during marine diffusion: f_mass_cons = ',f_mass_cons
+    endif
   endif
 
   ! store deposited material in dh_dep to be able to transfer this value to coupled thermo-mechanical code
@@ -542,7 +573,6 @@ subroutine Marine(ierr)
   ! >>>>>>>> compaction ends
 
   ! update the elevation
-  !h=ht+dh
   etot=etot+ht-h
   erate=erate+(ht-h)/dt
   where (h.lt.sealevel) Sedflux=0.d0
@@ -585,329 +615,329 @@ subroutine SiltSandCouplingDiffusion (h,f,Q1,Q2,nx,ny,dx,dy,dt, &
   integer ibc
   integer, intent(inout) :: ierr
 
-!  ! define other parameters
-!  integer i,j,ij,ipj,imj,ijp,ijm,nn
-!  double precision, dimension(:), allocatable :: hp,fp,ht,ft,hhalf,fhalf,fhalfp,tint
-!  double precision, dimension(:), allocatable :: diag,sup,inf,rhs,res
-!  double precision K1,K2,tol,err1,err2
-!  double precision Ap,Bp,Cp,Dp,Ep,Mp,Np
-!  character cbc*4
+  ! define other parameters
+  integer i,j,ij,ipj,imj,ijp,ijm,nn
+  double precision, dimension(:), allocatable :: hp,fp,ht,ft,hhalf,fhalf,fhalfp,tint
+  double precision, dimension(:), allocatable :: diag,sup,inf,rhs,res
+  double precision K1,K2,tol,err1,err2
+  double precision Ap,Bp,Cp,Dp,Ep,Mp,Np
+  character cbc*4
 
-!  write(*,*) 'SiltSandCouplingDiffusion before checking seas exist'
+  write(*,*) 'SiltSandCouplingDiffusion before checking seas exist'
 
   if (any(h<sealevel)) then  
 
-!  write(*,*) 'SiltSandCouplingDiffusion there are seas, sea level = ',sealevel
+  write(*,*) 'SiltSandCouplingDiffusion there are seas, sea level = ',sealevel
 
-!  write (cbc,'(i4)') ibc
-!
-!  K1=kdsea1
-!  K2=kdsea2
-!
-!  nn=nx*ny
-!
-!  write(*,*) 'before allocation'
-!
-!  allocate (hp(nn),fp(nn),ht(nn),ft(nn),hhalf(nn),fhalf(nn),fhalfp(nn),tint(nn))
-!
-!  write(*,*) 'after alllocation'
-!
-!  ! initilize the elevation and silt fraction at time t and t+dt/2
-!  ht=h
-!  ft=f
-!  hhalf=h
-!  fhalf=f
-!
-!  ! tolerance is in m
-!  tol=1.d0
-!  err1=2*tol
-!  err2=2*tol
-!  niter=0
-!
-!  ! iteration until convergence is reached
-!  do while (err1.gt.tol)
-!    ! update the elevation and silt fraction during each iteration
-!    hp=h
-!    fp=f
-!    fhalfp=fhalf
-!    niter=niter+1
-!    ! calculate the elevation h in x-direction
-!    allocate (diag(nx),sup(nx),inf(nx),rhs(nx),res(nx))
-!    do j=2,ny-1
-!      do i=1,nx
-!        ij=(j-1)*nx+i
-!        ipj=(j-1)*nx+i+1
-!        imj=(j-1)*nx+i-1
-!        ijp=(j)*nx+i
-!        ijm=(j-2)*nx+i
-!        ! in ocean and not at ocean-continent transition
-!        if (ht(ij).le.sealevel.and.flag(ij).eq.0) then
-!          if (i.eq.1) then
-!            if (cbc(4:4).eq.'1') then
-!              diag(i)=1.d0
-!              sup(i)=0.d0
-!              rhs(i)=ht(ij)
-!            else
-!              Ap=dt/2.d0*(K2+(K1-K2)*(fhalfp(ipj)+fhalfp(ij))/2.d0)/dx**2
-!              diag(i)=1.d0+Ap
-!              sup(i)=-Ap
-!              Cp=dt/2.d0*(K2+(K1-K2)*(ft(ijp)+ft(ij))/2.d0)*(ht(ijp)-ht(ij))/dy**2 &
-!              -dt/2.d0*(K2+(K1-K2)*(ft(ij)+ft(ijm))/2.d0)*(ht(ij)-ht(ijm))/dy**2 &
-!              +(Q1(ij)+Q2(ij))*dt/2.d0
-!              rhs(i)=Cp+ht(ij)
-!            endif
-!          elseif (i.eq.nx) then
-!            if (cbc(2:2).eq.'1') then
-!              diag(i)=1.d0
-!              inf(i)=0.d0
-!              rhs(i)=ht(ij)
-!            else
-!              Bp=-dt/2.d0*(K2+(K1-K2)*(fhalfp(ij)+fhalfp(imj))/2.d0)/dx**2
-!              diag(i)=1.d0-Bp
-!              inf(i)=Bp
-!              Cp=dt/2.d0*(K2+(K1-K2)*(ft(ijp)+ft(ij))/2.d0)*(ht(ijp)-ht(ij))/dy**2 &
-!              -dt/2.d0*(K2+(K1-K2)*(ft(ij)+ft(ijm))/2.d0)*(ht(ij)-ht(ijm))/dy**2 &
-!              +(Q1(ij)+Q2(ij))*dt/2.d0
-!              rhs(i)=Cp+ht(ij)
-!            endif
-!          else
-!            Ap=dt/2.d0*(K2+(K1-K2)*(fhalfp(ipj)+fhalfp(ij))/2.d0)/dx**2
-!            Bp=-dt/2.d0*(K2+(K1-K2)*(fhalfp(ij)+fhalfp(imj))/2.d0)/dx**2
-!            diag(i)=1.d0+Ap-Bp
-!            sup(i)=-Ap
-!            inf(i)=Bp
-!            Cp=dt/2.d0*(K2+(K1-K2)*(ft(ijp)+ft(ij))/2.d0)*(ht(ijp)-ht(ij))/dy**2 &
-!            -dt/2.d0*(K2+(K1-K2)*(ft(ij)+ft(ijm))/2.d0)*(ht(ij)-ht(ijm))/dy**2 &
-!            +(Q1(ij)+Q2(ij))*dt/2.d0
-!            rhs(i)=Cp+ht(ij)
-!          endif
-!          ! in continent
-!        else
-!          diag(i)=1.d0
-!          sup(i)=0.d0
-!          inf(i)=0.d0
-!          rhs(i)=ht(ij)
-!        endif
-!      enddo
-!      ! solve a tri-diagonal system of equations
-!      call tridag (inf,diag,sup,rhs,res,nx)
-!      do i=1,nx
-!        ij=(j-1)*nx+i
-!        hhalf(ij)=res(i)
-!      enddo
-!    enddo
-!    tint=hhalf
-!    ! the corner nodes (1,1) and (1,ny)
-!    hhalf(1)=hhalf(2)
-!    hhalf((ny-1)*nx+1)=hhalf((ny-1)*nx+2)
-!    ! the corner nodes (nx,1) and (nx,ny)
-!    hhalf(nx)=hhalf(nx-1)
-!    hhalf(nx*ny)=hhalf(nx*ny-1)
-!    deallocate (diag,sup,inf,rhs,res)
-!
-!    ! calculate the silt fraction F in x-direction
-!    allocate (diag(nx),sup(nx),inf(nx),rhs(nx),res(nx))
-!    do j=2,ny-1
-!      do i=2,nx-1
-!        ij=(j-1)*nx+i
-!        ipj=(j-1)*nx+i+1
-!        imj=(j-1)*nx+i-1
-!        ijp=(j)*nx+i
-!        ijm=(j-2)*nx+i
-!        ! in ocean and not at ocean-continent transition
-!        if (ht(ij).le.sealevel.and.flag(ij).eq.0) then
-!          ! deposition
-!          if (hhalf(ij).ge.(1.d0+1.d-6)*ht(ij)) then
-!            Dp=(hhalf(ij)-ht(ij))/dt
-!            Ep=K1/2.d0*(hhalf(ipj)-hhalf(ij))/dx**2
-!            Mp=-K1/2.d0*(hhalf(ij)-hhalf(imj))/dx**2
-!            Np=K1/2.d0*(ft(ijp)+ft(ij))*(ht(ijp)-ht(ij))/dy**2 &
-!            -K1/2.d0*(ft(ij)+ft(ijm))*(ht(ij)-ht(ijm))/dy**2 &
-!            +Q1(ij)
-!            diag(i)=2.d0*L/dt+Dp-Mp-Ep
-!            sup(i)=-Ep
-!            inf(i)=-Mp
-!            rhs(i)=Np-Dp*ft(ij)+2.d0*L*ft(ij)/dt
-!            ! erosion
-!          else
-!            diag(i)=1.d0
-!            sup(i)=0.d0
-!            inf(i)=0.d0
-!            rhs(i)=ft(ij)
-!          endif
-!          ! in continent
-!        else
-!          diag(i)=1.d0
-!          sup(i)=0.d0
-!          inf(i)=0.d0
-!          rhs(i)=ft(ij)
-!        endif
-!      enddo
-!      ! bc on i=1
-!      diag(1)=1.d0
-!      sup(1)=-1.d0
-!      rhs(1)=0.d0
-!      ! bc on i=nx
-!      diag(nx)=1.d0
-!      inf(nx)=-1.d0
-!      rhs(nx)=0.d0
-!      ! solve a tri-diagonal system of equations
-!      call tridag (inf,diag,sup,rhs,res,nx)
-!      do i=1,nx
-!        ij=(j-1)*nx+i
-!        fhalf(ij)=res(i)
-!      enddo
-!    enddo
-!    fhalf=max(0.d0,fhalf)
-!    fhalf=min(1.d0,fhalf)
-!    deallocate (diag,sup,inf,rhs,res)
-!
-!    ! calculate the elevation h in y-direction
-!    allocate (diag(ny),sup(ny),inf(ny),rhs(ny),res(ny))
-!    do i=2,nx-1
-!      do j=1,ny
-!        ij=(j-1)*nx+i
-!        ipj=(j-1)*nx+i+1
-!        imj=(j-1)*nx+i-1
-!        ijp=(j)*nx+i
-!        ijm=(j-2)*nx+i
-!        ! in ocean and not at ocean-continent transition
-!        if (ht(ij).le.sealevel.and.flag(ij).eq.0) then
-!          if (j.eq.1) then
-!            if (cbc(1:1).eq.'1') then
-!              diag(j)=1.d0
-!              sup(j)=0.d0
-!              rhs(j)=hhalf(ij)
-!            else
-!              Ap=dt/2.d0*(K2+(K1-K2)*(fp(ijp)+fp(ij))/2.d0)/dy**2
-!              diag(j)=1.d0+Ap
-!              sup(j)=-Ap
-!              Cp=dt/2.d0*(K2+(K1-K2)*(fhalf(ipj)+fhalf(ij))/2.d0)*(hhalf(ipj)-hhalf(ij))/dx**2 &
-!              -dt/2.d0*(K2+(K1-K2)*(fhalf(ij)+fhalf(imj))/2.d0)*(hhalf(ij)-hhalf(imj))/dx**2 &
-!              +(Q1(ij)+Q2(ij))*dt/2.d0
-!              rhs(j)=Cp+hhalf(ij)
-!            endif
-!          elseif (j.eq.ny) then
-!            if (cbc(3:3).eq.'1') then
-!              diag(j)=1.d0
-!              inf(j)=0.d0
-!              rhs(j)=hhalf(ij)
-!            else
-!              Bp=-dt/2.d0*(K2+(K1-K2)*(fp(ij)+fp(ijm))/2.d0)/dy**2
-!              diag(j)=1.d0-Bp
-!              inf(j)=Bp
-!              Cp=dt/2.d0*(K2+(K1-K2)*(fhalf(ipj)+fhalf(ij))/2.d0)*(hhalf(ipj)-hhalf(ij))/dx**2 &
-!              -dt/2.d0*(K2+(K1-K2)*(fhalf(ij)+fhalf(imj))/2.d0)*(hhalf(ij)-hhalf(imj))/dx**2 &
-!              +(Q1(ij)+Q2(ij))*dt/2.d0
-!              rhs(j)=Cp+hhalf(ij)
-!            endif
-!          else
-!            Ap=dt/2.d0*(K2+(K1-K2)*(fp(ijp)+fp(ij))/2.d0)/dy**2
-!            Bp=-dt/2.d0*(K2+(K1-K2)*(fp(ij)+fp(ijm))/2.d0)/dy**2
-!            diag(j)=1.d0+Ap-Bp
-!            sup(j)=-Ap
-!            inf(j)=Bp
-!            Cp=dt/2.d0*(K2+(K1-K2)*(fhalf(ipj)+fhalf(ij))/2.d0)*(hhalf(ipj)-hhalf(ij))/dx**2 &
-!            -dt/2.d0*(K2+(K1-K2)*(fhalf(ij)+fhalf(imj))/2.d0)*(hhalf(ij)-hhalf(imj))/dx**2 &
-!            +(Q1(ij)+Q2(ij))*dt/2.d0
-!            rhs(j)=Cp+hhalf(ij)
-!          endif
-!          ! in continent
-!        else
-!          diag(j)=1.d0
-!          sup(j)=0.d0
-!          inf(j)=0.d0
-!          rhs(j)=hhalf(ij)
-!        endif
-!      enddo
-!      ! solve a tri-diagonal system of equations
-!      call tridag (inf,diag,sup,rhs,res,ny)
-!      do j=1,ny
-!        ij=(j-1)*nx+i
-!        tint(ij)=res(j)
-!      enddo
-!    enddo
-!    h=tint
-!    ! the corner nodes (1,1) and (1,ny)
-!    h(1)=h(2)
-!    h((ny-1)*nx+1)=h((ny-1)*nx+2)
-!    ! the corner nodes (nx,1) and (nx,ny)
-!    h(nx)=h(nx-1)
-!    h(nx*ny)=h(nx*ny-1)
-!    deallocate (diag,sup,inf,rhs,res)
-!
-!    ! calculate the silt fraction F in y-direction
-!    allocate (diag(ny),sup(ny),inf(ny),rhs(ny),res(ny))
-!    do i=2,nx-1
-!      do j=2,ny-1
-!        ij=(j-1)*nx+i
-!        ipj=(j-1)*nx+i+1
-!        imj=(j-1)*nx+i-1
-!        ijp=(j)*nx+i
-!        ijm=(j-2)*nx+i
-!        ! in ocean and not at ocean-continent transition
-!        if (ht(ij).le.sealevel.and.flag(ij).eq.0) then
-!          ! deposition
-!          if (h(ij).ge.(1.d0+1.d-6)*hhalf(ij)) then
-!            Dp=(h(ij)-hhalf(ij))/dt
-!            Ep=K1/2.d0*(h(ijp)-h(ij))/dy**2
-!            Mp=-K1/2.d0*(h(ij)-h(ijm))/dy**2
-!            Np=K1/2.d0*(fhalf(ipj)+fhalf(ij))*(hhalf(ipj)-hhalf(ij))/dx**2 &
-!            -K1/2.d0*(fhalf(ij)+fhalf(imj))*(hhalf(ij)-hhalf(imj))/dx**2 &
-!            +Q1(ij)
-!            diag(j)=2.d0*L/dt+Dp-Mp-Ep
-!            sup(j)=-Ep
-!            inf(j)=-Mp
-!            rhs(j)=Np-Dp*fhalf(ij)+2.d0*L*fhalf(ij)/dt
-!            ! erosion
-!          else
-!            diag(j)=1.d0
-!            sup(j)=0.d0
-!            inf(j)=0.d0
-!            rhs(j)=fhalf(ij)
-!          endif
-!          ! in continent
-!        else
-!          diag(j)=1.d0
-!          sup(j)=0.d0
-!          inf(j)=0.d0
-!          rhs(j)=fhalf(ij)
-!        endif
-!      enddo
-!      ! bc on j=1
-!      diag(1)=1.d0
-!      sup(1)=-1.d0
-!      rhs(1)=0.d0
-!      ! bc on j=ny
-!      diag(ny)=1.d0
-!      inf(ny)=-1.d0
-!      rhs(ny)=0.d0
-!      ! solve a tri-diagonal system of equations
-!      call tridag (inf,diag,sup,rhs,res,ny)
-!      do j=1,ny
-!        ij=(j-1)*nx+i
-!        f(ij)=res(j)
-!      enddo
-!    enddo
-!    f=max(0.d0,f)
-!    f=min(1.d0,f)
-!    deallocate (diag,sup,inf,rhs,res)
-!
-!    ! calculate the errors in each iteration
-!    err1=maxval(abs(h-hp))
-!    err2=maxval(abs(h-hp)/(1.d0+abs(h)))
-!
-!    !print*,'niter',niter,minval(h-hp),sum(h-hp)/nn,maxval(h-hp),err1
-!
-!    if (niter.gt.1000) then
-!      FSCAPE_RAISE_MESSAGE('Marine error: Multi-lithology diffusion not converging; decrease time step',ERR_NotConverged,ierr)
-!      FSCAPE_CHKERR(ierr)
-!    endif
-!
-!    ! end of iteration
-!  enddo
-!
-!  deallocate (hp,fp,ht,ft,hhalf,fhalf,fhalfp,tint)
+  write (cbc,'(i4)') ibc
+
+  K1=kdsea1
+  K2=kdsea2
+
+  nn=nx*ny
+
+  write(*,*) 'before allocation'
+
+  allocate (hp(nn),fp(nn),ht(nn),ft(nn),hhalf(nn),fhalf(nn),fhalfp(nn),tint(nn))
+
+  write(*,*) 'after alllocation'
+
+  ! initilize the elevation and silt fraction at time t and t+dt/2
+  ht=h
+  ft=f
+  hhalf=h
+  fhalf=f
+
+  ! tolerance is in m
+  tol=1.d0
+  err1=2*tol
+  err2=2*tol
+  niter=0
+
+  ! iteration until convergence is reached
+  do while (err1.gt.tol)
+    ! update the elevation and silt fraction during each iteration
+    hp=h
+    fp=f
+    fhalfp=fhalf
+    niter=niter+1
+    ! calculate the elevation h in x-direction
+    allocate (diag(nx),sup(nx),inf(nx),rhs(nx),res(nx))
+    do j=2,ny-1
+      do i=1,nx
+        ij=(j-1)*nx+i
+        ipj=(j-1)*nx+i+1
+        imj=(j-1)*nx+i-1
+        ijp=(j)*nx+i
+        ijm=(j-2)*nx+i
+        ! in ocean and not at ocean-continent transition
+        if (ht(ij).le.sealevel.and.flag(ij).eq.0) then
+          if (i.eq.1) then
+            if (cbc(4:4).eq.'1') then
+              diag(i)=1.d0
+              sup(i)=0.d0
+              rhs(i)=ht(ij)
+            else
+              Ap=dt/2.d0*(K2+(K1-K2)*(fhalfp(ipj)+fhalfp(ij))/2.d0)/dx**2
+              diag(i)=1.d0+Ap
+              sup(i)=-Ap
+              Cp=dt/2.d0*(K2+(K1-K2)*(ft(ijp)+ft(ij))/2.d0)*(ht(ijp)-ht(ij))/dy**2 &
+              -dt/2.d0*(K2+(K1-K2)*(ft(ij)+ft(ijm))/2.d0)*(ht(ij)-ht(ijm))/dy**2 &
+              +(Q1(ij)+Q2(ij))*dt/2.d0
+              rhs(i)=Cp+ht(ij)
+            endif
+          elseif (i.eq.nx) then
+            if (cbc(2:2).eq.'1') then
+              diag(i)=1.d0
+              inf(i)=0.d0
+              rhs(i)=ht(ij)
+            else
+              Bp=-dt/2.d0*(K2+(K1-K2)*(fhalfp(ij)+fhalfp(imj))/2.d0)/dx**2
+              diag(i)=1.d0-Bp
+              inf(i)=Bp
+              Cp=dt/2.d0*(K2+(K1-K2)*(ft(ijp)+ft(ij))/2.d0)*(ht(ijp)-ht(ij))/dy**2 &
+              -dt/2.d0*(K2+(K1-K2)*(ft(ij)+ft(ijm))/2.d0)*(ht(ij)-ht(ijm))/dy**2 &
+              +(Q1(ij)+Q2(ij))*dt/2.d0
+              rhs(i)=Cp+ht(ij)
+            endif
+          else
+            Ap=dt/2.d0*(K2+(K1-K2)*(fhalfp(ipj)+fhalfp(ij))/2.d0)/dx**2
+            Bp=-dt/2.d0*(K2+(K1-K2)*(fhalfp(ij)+fhalfp(imj))/2.d0)/dx**2
+            diag(i)=1.d0+Ap-Bp
+            sup(i)=-Ap
+            inf(i)=Bp
+            Cp=dt/2.d0*(K2+(K1-K2)*(ft(ijp)+ft(ij))/2.d0)*(ht(ijp)-ht(ij))/dy**2 &
+            -dt/2.d0*(K2+(K1-K2)*(ft(ij)+ft(ijm))/2.d0)*(ht(ij)-ht(ijm))/dy**2 &
+            +(Q1(ij)+Q2(ij))*dt/2.d0
+            rhs(i)=Cp+ht(ij)
+          endif
+          ! in continent
+        else
+          diag(i)=1.d0
+          sup(i)=0.d0
+          inf(i)=0.d0
+          rhs(i)=ht(ij)
+        endif
+      enddo
+      ! solve a tri-diagonal system of equations
+      call tridag (inf,diag,sup,rhs,res,nx,ierr);FSCAPE_CHKERR(ierr)
+      do i=1,nx
+        ij=(j-1)*nx+i
+        hhalf(ij)=res(i)
+      enddo
+    enddo
+    tint=hhalf
+    ! the corner nodes (1,1) and (1,ny)
+    hhalf(1)=hhalf(2)
+    hhalf((ny-1)*nx+1)=hhalf((ny-1)*nx+2)
+    ! the corner nodes (nx,1) and (nx,ny)
+    hhalf(nx)=hhalf(nx-1)
+    hhalf(nx*ny)=hhalf(nx*ny-1)
+    deallocate (diag,sup,inf,rhs,res)
+
+    ! calculate the silt fraction F in x-direction
+    allocate (diag(nx),sup(nx),inf(nx),rhs(nx),res(nx))
+    do j=2,ny-1
+      do i=2,nx-1
+        ij=(j-1)*nx+i
+        ipj=(j-1)*nx+i+1
+        imj=(j-1)*nx+i-1
+        ijp=(j)*nx+i
+        ijm=(j-2)*nx+i
+        ! in ocean and not at ocean-continent transition
+        if (ht(ij).le.sealevel.and.flag(ij).eq.0) then
+          ! deposition
+          if (hhalf(ij).ge.(1.d0+1.d-6)*ht(ij)) then
+            Dp=(hhalf(ij)-ht(ij))/dt
+            Ep=K1/2.d0*(hhalf(ipj)-hhalf(ij))/dx**2
+            Mp=-K1/2.d0*(hhalf(ij)-hhalf(imj))/dx**2
+            Np=K1/2.d0*(ft(ijp)+ft(ij))*(ht(ijp)-ht(ij))/dy**2 &
+            -K1/2.d0*(ft(ij)+ft(ijm))*(ht(ij)-ht(ijm))/dy**2 &
+            +Q1(ij)
+            diag(i)=2.d0*L/dt+Dp-Mp-Ep
+            sup(i)=-Ep
+            inf(i)=-Mp
+            rhs(i)=Np-Dp*ft(ij)+2.d0*L*ft(ij)/dt
+            ! erosion
+          else
+            diag(i)=1.d0
+            sup(i)=0.d0
+            inf(i)=0.d0
+            rhs(i)=ft(ij)
+          endif
+          ! in continent
+        else
+          diag(i)=1.d0
+          sup(i)=0.d0
+          inf(i)=0.d0
+          rhs(i)=ft(ij)
+        endif
+      enddo
+      ! bc on i=1
+      diag(1)=1.d0
+      sup(1)=-1.d0
+      rhs(1)=0.d0
+      ! bc on i=nx
+      diag(nx)=1.d0
+      inf(nx)=-1.d0
+      rhs(nx)=0.d0
+      ! solve a tri-diagonal system of equations
+      call tridag (inf,diag,sup,rhs,res,nx,ierr);FSCAPE_CHKERR(ierr)
+      do i=1,nx
+        ij=(j-1)*nx+i
+        fhalf(ij)=res(i)
+      enddo
+    enddo
+    fhalf=max(0.d0,fhalf)
+    fhalf=min(1.d0,fhalf)
+    deallocate (diag,sup,inf,rhs,res)
+
+    ! calculate the elevation h in y-direction
+    allocate (diag(ny),sup(ny),inf(ny),rhs(ny),res(ny))
+    do i=2,nx-1
+      do j=1,ny
+        ij=(j-1)*nx+i
+        ipj=(j-1)*nx+i+1
+        imj=(j-1)*nx+i-1
+        ijp=(j)*nx+i
+        ijm=(j-2)*nx+i
+        ! in ocean and not at ocean-continent transition
+        if (ht(ij).le.sealevel.and.flag(ij).eq.0) then
+          if (j.eq.1) then
+            if (cbc(1:1).eq.'1') then
+              diag(j)=1.d0
+              sup(j)=0.d0
+              rhs(j)=hhalf(ij)
+            else
+              Ap=dt/2.d0*(K2+(K1-K2)*(fp(ijp)+fp(ij))/2.d0)/dy**2
+              diag(j)=1.d0+Ap
+              sup(j)=-Ap
+              Cp=dt/2.d0*(K2+(K1-K2)*(fhalf(ipj)+fhalf(ij))/2.d0)*(hhalf(ipj)-hhalf(ij))/dx**2 &
+              -dt/2.d0*(K2+(K1-K2)*(fhalf(ij)+fhalf(imj))/2.d0)*(hhalf(ij)-hhalf(imj))/dx**2 &
+              +(Q1(ij)+Q2(ij))*dt/2.d0
+              rhs(j)=Cp+hhalf(ij)
+            endif
+          elseif (j.eq.ny) then
+            if (cbc(3:3).eq.'1') then
+              diag(j)=1.d0
+              inf(j)=0.d0
+              rhs(j)=hhalf(ij)
+            else
+              Bp=-dt/2.d0*(K2+(K1-K2)*(fp(ij)+fp(ijm))/2.d0)/dy**2
+              diag(j)=1.d0-Bp
+              inf(j)=Bp
+              Cp=dt/2.d0*(K2+(K1-K2)*(fhalf(ipj)+fhalf(ij))/2.d0)*(hhalf(ipj)-hhalf(ij))/dx**2 &
+              -dt/2.d0*(K2+(K1-K2)*(fhalf(ij)+fhalf(imj))/2.d0)*(hhalf(ij)-hhalf(imj))/dx**2 &
+              +(Q1(ij)+Q2(ij))*dt/2.d0
+              rhs(j)=Cp+hhalf(ij)
+            endif
+          else
+            Ap=dt/2.d0*(K2+(K1-K2)*(fp(ijp)+fp(ij))/2.d0)/dy**2
+            Bp=-dt/2.d0*(K2+(K1-K2)*(fp(ij)+fp(ijm))/2.d0)/dy**2
+            diag(j)=1.d0+Ap-Bp
+            sup(j)=-Ap
+            inf(j)=Bp
+            Cp=dt/2.d0*(K2+(K1-K2)*(fhalf(ipj)+fhalf(ij))/2.d0)*(hhalf(ipj)-hhalf(ij))/dx**2 &
+            -dt/2.d0*(K2+(K1-K2)*(fhalf(ij)+fhalf(imj))/2.d0)*(hhalf(ij)-hhalf(imj))/dx**2 &
+            +(Q1(ij)+Q2(ij))*dt/2.d0
+            rhs(j)=Cp+hhalf(ij)
+          endif
+          ! in continent
+        else
+          diag(j)=1.d0
+          sup(j)=0.d0
+          inf(j)=0.d0
+          rhs(j)=hhalf(ij)
+        endif
+      enddo
+      ! solve a tri-diagonal system of equations
+      call tridag (inf,diag,sup,rhs,res,ny,ierr);FSCAPE_CHKERR(ierr)
+      do j=1,ny
+        ij=(j-1)*nx+i
+        tint(ij)=res(j)
+      enddo
+    enddo
+    h=tint
+    ! the corner nodes (1,1) and (1,ny)
+    h(1)=h(2)
+    h((ny-1)*nx+1)=h((ny-1)*nx+2)
+    ! the corner nodes (nx,1) and (nx,ny)
+    h(nx)=h(nx-1)
+    h(nx*ny)=h(nx*ny-1)
+    deallocate (diag,sup,inf,rhs,res)
+
+    ! calculate the silt fraction F in y-direction
+    allocate (diag(ny),sup(ny),inf(ny),rhs(ny),res(ny))
+    do i=2,nx-1
+      do j=2,ny-1
+        ij=(j-1)*nx+i
+        ipj=(j-1)*nx+i+1
+        imj=(j-1)*nx+i-1
+        ijp=(j)*nx+i
+        ijm=(j-2)*nx+i
+        ! in ocean and not at ocean-continent transition
+        if (ht(ij).le.sealevel.and.flag(ij).eq.0) then
+          ! deposition
+          if (h(ij).ge.(1.d0+1.d-6)*hhalf(ij)) then
+            Dp=(h(ij)-hhalf(ij))/dt
+            Ep=K1/2.d0*(h(ijp)-h(ij))/dy**2
+            Mp=-K1/2.d0*(h(ij)-h(ijm))/dy**2
+            Np=K1/2.d0*(fhalf(ipj)+fhalf(ij))*(hhalf(ipj)-hhalf(ij))/dx**2 &
+            -K1/2.d0*(fhalf(ij)+fhalf(imj))*(hhalf(ij)-hhalf(imj))/dx**2 &
+            +Q1(ij)
+            diag(j)=2.d0*L/dt+Dp-Mp-Ep
+            sup(j)=-Ep
+            inf(j)=-Mp
+            rhs(j)=Np-Dp*fhalf(ij)+2.d0*L*fhalf(ij)/dt
+            ! erosion
+          else
+            diag(j)=1.d0
+            sup(j)=0.d0
+            inf(j)=0.d0
+            rhs(j)=fhalf(ij)
+          endif
+          ! in continent
+        else
+          diag(j)=1.d0
+          sup(j)=0.d0
+          inf(j)=0.d0
+          rhs(j)=fhalf(ij)
+        endif
+      enddo
+      ! bc on j=1
+      diag(1)=1.d0
+      sup(1)=-1.d0
+      rhs(1)=0.d0
+      ! bc on j=ny
+      diag(ny)=1.d0
+      inf(ny)=-1.d0
+      rhs(ny)=0.d0
+      ! solve a tri-diagonal system of equations
+      call tridag (inf,diag,sup,rhs,res,ny,ierr);FSCAPE_CHKERR(ierr)
+      do j=1,ny
+        ij=(j-1)*nx+i
+        f(ij)=res(j)
+      enddo
+    enddo
+    f=max(0.d0,f)
+    f=min(1.d0,f)
+    deallocate (diag,sup,inf,rhs,res)
+
+    ! calculate the errors in each iteration
+    err1=maxval(abs(h-hp))
+    err2=maxval(abs(h-hp)/(1.d0+abs(h)))
+
+    !print*,'niter',niter,minval(h-hp),sum(h-hp)/nn,maxval(h-hp),err1
+
+    if (niter.gt.1000) then
+      FSCAPE_RAISE_MESSAGE('Marine error: Multi-lithology diffusion not converging; decrease time step',ERR_NotConverged,ierr)
+      FSCAPE_CHKERR(ierr)
+    endif
+
+    ! end of iteration
+  enddo
+
+  deallocate (hp,fp,ht,ft,hhalf,fhalf,fhalfp,tint)
 
   endif ! seas exist (h<sealevel)
 

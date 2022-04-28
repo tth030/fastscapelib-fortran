@@ -49,6 +49,8 @@ call FastScape_Setup(ierr);FSCAPE_CHKERR_ABORT(ierr)
 !call FastScape_Set_Marine_Aggradation_rate(-0.0001d0,ierr);FSCAPE_CHKERR_ABORT(ierr)
 
 call FastScape_Set_Enforce_Marine_Mass_cons(.true.,ierr)
+call FastScape_Set_Enforce_Marine_No_Erosion(.true.,ierr)
+call FastScape_Set_Enforce_Marine_Sed_Below_Sealevel(.true.,ierr)
 
 xl=2400.d3
 yl=1200.d3
@@ -196,7 +198,8 @@ call cpu_time (time_in)
     !vexp = 2.d0
     !call FastScape_VTK (chi, vexp,ierr);FSCAPE_CHKERR_ABORT(ierr) ! if value > 0, elevation plus value is written to file. If value <0, basement and sealevel + value is written to file.
     vexp = 50.d0
-    call FastScape_VTK (etot, vexp,ierr);FSCAPE_CHKERR_ABORT(ierr) ! if value > 0, elevation plus value is written to file. If value <0, basement and sealevel + value is written to file.
+    !call FastScape_VTK (etot, vexp,ierr);FSCAPE_CHKERR_ABORT(ierr) ! if value > 0, elevation plus value is written to file. If value <0, basement and sealevel + value is written to file.
+    call FastScape_VTK (b, vexp,ierr);FSCAPE_CHKERR_ABORT(ierr) ! if value > 0, elevation plus value is written to file. If value <0, basement and sealevel + value is written to file.
     !call FastScape_VTK (catchment, vexp,ierr);FSCAPE_CHKERR_ABORT(ierr)
     !call FastScape_VTK (etot, vexp,ierr);FSCAPE_CHKERR_ABORT(ierr)
     !field(:,3)=sedflux

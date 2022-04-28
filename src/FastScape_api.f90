@@ -1136,6 +1136,44 @@ end subroutine FastScape_Set_Enforce_Marine_Mass_cons
 
 !--------------------------------------------------------------------------
 
+subroutine FastScape_Set_Enforce_Marine_Sed_Below_Sealevel (enforce_marine_sed_below_sealevelp,ierr)
+
+use FastScapeContext
+
+implicit none
+
+integer, intent(out):: ierr
+logical, intent(in) :: enforce_marine_sed_below_sealevelp
+
+ierr=0
+
+call SetEnforceMarineSedBelowSealevel (enforce_marine_sed_below_sealevelp)
+
+return
+
+end subroutine FastScape_Set_Enforce_Marine_Sed_Below_Sealevel
+
+!--------------------------------------------------------------------------
+
+subroutine FastScape_Set_Enforce_Marine_No_Erosion (enforce_marine_no_erosionp,ierr)
+
+use FastScapeContext
+
+implicit none
+
+integer, intent(out):: ierr
+logical, intent(in) :: enforce_marine_no_erosionp
+
+ierr=0
+
+call SetEnforceMarineNoErosion (enforce_marine_no_erosionp)
+
+return
+
+end subroutine FastScape_Set_Enforce_Marine_No_Erosion
+
+!--------------------------------------------------------------------------
+
 subroutine FastScape_Set_RunLagToEul (runLagToEulp,ierr)
 
 use FastScapeContext

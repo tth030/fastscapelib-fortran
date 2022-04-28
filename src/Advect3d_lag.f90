@@ -18,10 +18,10 @@ subroutine Advect3d_lag (ierr)
   ! Useful if dt is variable
   advect_dt=totaltime-totaltime_before_advection
 
+  if (step == 0) call cloud_setup(ierr)
+
   if ( (mod(step+1,advect_every_step)==0) ) then
 
-  if (totaltime_before_advection == 0) call cloud_setup(ierr)
-  
   !  write(*,'(a,x,i6,x,f9.3,x,f13.3,x,f13.3)') 'Advection 3d step,advect_dt',step,advect_dt,totaltime,totaltime_before_advection
   totaltime_before_advection=totaltime
 
@@ -577,6 +577,16 @@ subroutine update_cloud (ierr)
 
             end if
 
+            if ( (clinject%y(counter_inject) > y3) .or. (clinject%y(counter_inject) > y4) .or. (clinject%y(counter_inject) < y1) .or. (clinject%y(counter_inject) < y2) .or. &
+                 (clinject%x(counter_inject) > x3) .or. (clinject%x(counter_inject) > x2) .or. (clinject%x(counter_inject) < x4) .or. (clinject%x(counter_inject) < x1) ) then
+              write(*,*) 'WARNING: something weird with injection new particle outside the cell ', clinject%x(counter_inject),clinject%y(counter_inject)
+              write(*,*) '4 cell nodes coordinates are :'
+              write(*,*) ' node 1 ',x1,y1
+              write(*,*) ' node 2 ',x2,y2
+              write(*,*) ' node 3 ',x3,y3
+              write(*,*) ' node 4 ',x4,y4
+            endif
+
             !find closest cloud point to new point
             if (nnic>0) then
                ichoice = grid%pair(1,ic)
@@ -734,7 +744,7 @@ subroutine cloud_to_eul (ierr)
   double precision, dimension(4) :: xcell, ycell
   double precision distmin, dist, distmincell, rcutlim, xip, yip
   integer, dimension(4) :: pair
-  double precision ymin,xmin,ymax,xmax,r,s,N1,N2,N3,N4, dx, dy 
+  double precision ymin,xmin,ymax,xmax,r,s,N1,N2,N3,N4, dx, dy, maxelev 
   integer counter_interpolated, counter_averaged, counter_closest
 
   ierr   = 0
@@ -757,8 +767,15 @@ subroutine cloud_to_eul (ierr)
     icell(2) = icell(1) + 1
     icell(3) = (j-1)*(nx-1) + i
     icell(4) = icell(3) - 1 
+    if (i==nx) then
+      icell(3) = -1 ; icell(2) = -1
+    endif
+    if (i==1) then
+      icell(4) = -1 ; icell(1) = -1
+    endif
     ! select closest particules in the surrounding cells
     distmin     = 1.d30
+    maxelev     = -1.d30
     nneighbours = 0
     do k=1,4
       ic = icell(k)
@@ -770,6 +787,9 @@ subroutine cloud_to_eul (ierr)
           if (dist<distmincell) then
             distmincell = dist
             ichoice2    = grid%pair(ip,ic)
+          endif
+          if (cl%h(grid%pair(ip,ic))>maxelev) then
+            maxelev = cl%h(grid%pair(ip,ic))
           endif
         enddo
         nneighbours       = nneighbours+1
@@ -783,12 +803,12 @@ subroutine cloud_to_eul (ierr)
       endif
     enddo
 
-    if (sqrt(distmin)>rcutlim) then
-      !interpolation
-      !write(*,'(a,3I10)') 'WARNING: no sufficiently close particle for this eul pt ',counter,i,j
-      !write(*,*) 'using nneighbours particles for interpolation ', nneighbours
-      !write(*,'(2F15.6)') sqrt(distmin), rcutlim
-      !stop 'distmin>rcutlim'
+!    if (sqrt(distmin)>rcutlim) then
+!      !interpolation
+!      !write(*,'(a,3I10)') 'WARNING: no sufficiently close particle for this eul pt ',counter,i,j
+!      !write(*,*) 'using nneighbours particles for interpolation ', nneighbours
+!      !write(*,'(2F15.6)') sqrt(distmin), rcutlim
+!      !stop 'distmin>rcutlim'
       if (nneighbours==4) then
         counter_interpolated = counter_interpolated + 1
         ! shape function
@@ -798,13 +818,22 @@ subroutine cloud_to_eul (ierr)
         xmax=(xcell(3)-xcell(2))/(ycell(3)-ycell(2))*(yip-ycell(2)) + xcell(2)
         r=((xip-xmin)/(xmax-xmin) -0.5d0 ) *2.d0
         ymin=(ycell(2)-ycell(1))/(xcell(2)-xcell(1))*(xip-xcell(1)) + ycell(1)
-        ymax=(ycell(3)-ycell(4))/(xcell(3)-xcell(4))*(xip-xcell(1)) + ycell(4)
+        ymax=(ycell(3)-ycell(4))/(xcell(3)-xcell(4))*(xip-xcell(4)) + ycell(4)
         s=((yip-ymin)/(ymax-ymin) -0.5d0 ) *2.d0
         N1=0.25d0*(1.d0-r)*(1.d0-s) 
         N2=0.25d0*(1.d0+r)*(1.d0-s) 
         N3=0.25d0*(1.d0+r)*(1.d0+s) 
         N4=0.25d0*(1.d0-r)*(1.d0+s) 
         h(counter)     = N1 * cl%h(pair(1))     + N2 * cl%h(pair(2))     + N3 * cl%h(pair(3))     + N4 * cl%h(pair(4))
+        if (h(counter)>maxelev) then
+          write(*,*) 'WARNING: something weird with shape function h(counter) > maxelev ', h(counter), maxelev
+          write(*,*) '4 closest particles coordinates are :'
+          do k=1,4
+            write(*,*) 'xcell ',k,xcell(k)
+            write(*,*) 'ycell ',k,ycell(k)
+            write(*,*) 'h     ',k,cl%h(pair(k))
+          enddo
+        endif
         b(counter)     = N1 * cl%b(pair(1))     + N2 * cl%b(pair(2))     + N3 * cl%b(pair(3))     + N4 * cl%b(pair(4))
         etot(counter)  = N1 * cl%etot(pair(1))  + N2 * cl%etot(pair(2))  + N3 * cl%etot(pair(3))  + N4 * cl%etot(pair(4))
         erate(counter) = N1 * cl%erate(pair(1)) + N2 * cl%erate(pair(2)) + N3 * cl%erate(pair(3)) + N4 * cl%erate(pair(4))
@@ -826,13 +855,13 @@ subroutine cloud_to_eul (ierr)
         etot(counter)  = etot(counter)/nneighbours
         erate(counter) = erate(counter)/nneighbours
       endif
-    else
-      counter_closest = counter_closest + 1
-      h(counter)     = cl%h(ichoice)
-      b(counter)     = cl%b(ichoice)
-      erate(counter) = cl%erate(ichoice)
-      etot(counter)  = cl%etot(ichoice)
-    endif
+!    else
+!      counter_closest = counter_closest + 1
+!      h(counter)     = cl%h(ichoice)
+!      b(counter)     = cl%b(ichoice)
+!      erate(counter) = cl%erate(ichoice)
+!      etot(counter)  = cl%etot(ichoice)
+!    endif
 
   enddo
   !$omp end parallel do

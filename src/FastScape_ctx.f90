@@ -32,7 +32,7 @@ module FastScapeContext
   logical, dimension(:), allocatable :: bounds_bc
   integer :: step, advect_every_step
   integer :: nGSStreamPowerLaw, nGSMarine
-  logical :: setup_has_been_run, enforce_marine_mass_cons, enforce_marine_no_erosion
+  logical :: setup_has_been_run, enforce_marine_mass_cons, enforce_marine_no_erosion, enforce_marine_sed_below_sealevel
   logical :: low_sealevel_at_shallow_sea, use_marine_aggradation
   double precision, target, dimension(:), allocatable :: h,u,vx,vy,length,a,erate,etot,catch,catch0,b,precip,kf,kd
   double precision, target, dimension(:), allocatable :: Sedflux, Fmix
@@ -178,10 +178,11 @@ module FastScapeContext
     runMarine = .false.
     runUplift = .false.
 
-    enforce_marine_no_erosion = .true.
-    enforce_marine_mass_cons = .false.
-    low_sealevel_at_shallow_sea = .false.
-    use_marine_aggradation = .false.
+    enforce_marine_no_erosion         = .false.
+    enforce_marine_sed_below_sealevel = .false.
+    enforce_marine_mass_cons          = .false.
+    low_sealevel_at_shallow_sea       = .false.
+    use_marine_aggradation            = .false.
 
     nGSStreamPowerLaw = 0
     nGSMarine = 0
@@ -1023,6 +1024,30 @@ module FastScapeContext
     return
 
     end subroutine SetEnforceMarineMassCons
+
+    !---------------------------------------------------------------
+
+    subroutine SetEnforceMarineSedBelowSealevel (enforce_marine_sed_below_sealevelp)
+
+    logical, intent(in) :: enforce_marine_sed_below_sealevelp
+
+    enforce_marine_sed_below_sealevel = enforce_marine_sed_below_sealevelp
+
+    return
+    
+    end subroutine SetEnforceMarineSedBelowSealevel
+
+    !---------------------------------------------------------------
+
+    subroutine SetEnforceMarineNoErosion (enforce_marine_no_erosionp)
+
+    logical, intent(in) :: enforce_marine_no_erosionp
+
+    enforce_marine_no_erosion = enforce_marine_no_erosionp
+
+    return
+
+    end subroutine SetEnforceMarineNoErosion
 
     !---------------------------------------------------------------
 
