@@ -890,7 +890,10 @@ subroutine EulToLag (h_before_sp,b_before_sp,etot_before_sp,erate_before_sp,ierr
   integer ic, i, ip, ncell, inode1, inode2, inode3, inode4
   double precision xnode1, ynode1, r, s, yip, dx, dy, xip
   !double precision ymin, ymax
-  double precision N1, N2, N3, N4
+  double precision N1, N2, N3, N4, VERYSMALL,dhp
+  logical DeltaOrSea
+
+  VERYSMALL = 1.d-3
 
   ierr  = 0
   ncell = (nx-1)*(ny-1)
@@ -910,6 +913,12 @@ subroutine EulToLag (h_before_sp,b_before_sp,etot_before_sp,erate_before_sp,ierr
     inode4=grid%icon(4,ic)
     xnode1=grid%x(inode1)
     ynode1=grid%y(inode1)
+
+    DeltaOrSea = .false.
+    if ( h(inode1) <= sealevel .or. h(inode2) <= sealevel .or. h(inode3) <= sealevel .or. h(inode4) <= sealevel ) then
+       DeltaOrSea = .true.
+    endif
+
     do i=1,grid%nn(ic)
        ip=grid%pair(i,ic)
        xip=cl%x(ip)
@@ -923,11 +932,25 @@ subroutine EulToLag (h_before_sp,b_before_sp,etot_before_sp,erate_before_sp,ierr
        N2=0.25d0*(1.d0+r)*(1.d0-s) 
        N3=0.25d0*(1.d0+r)*(1.d0+s) 
        N4=0.25d0*(1.d0-r)*(1.d0+s)
-       cl%h(ip)     = cl%h(ip)     + N1 * dh(inode1)     + N2 * dh(inode2)     + N3 * dh(inode3)     + N4 * dh(inode4)
+       dhp = N1 * dh(inode1)     + N2 * dh(inode2)     + N3 * dh(inode3)     + N4 * dh(inode4)
+       if (DeltaOrSea) then
+         if (cl%h(ip)< sealevel .and. cl%h(ip)+dhp>sealevel) dhp = sealevel - cl%h(ip)
+         if (cl%h(ip)>=sealevel .and. dhp>0)                 dhp = 0.d0                            ! this particle close to the shoreline could be eroded or have deposition but we cannot know
+                                                                                                   ! but for sure we want to avoid to transfer sediments from offshore to onshore because of interpolation
+         if (cl%h(ip)>=sealevel .and. cl%h(ip)+dhp<sealevel) dhp = sealevel + VERYSMALL - cl%h(ip)
+       else
+         if (cl%h(ip)+dhp< sealevel) dhp = sealevel + VERYSMALL - cl%h(ip)
+       endif
+       cl%h(ip)     = cl%h(ip) + dhp
        cl%b(ip)     = cl%b(ip)     + N1 * db(inode1)     + N2 * db(inode2)     + N3 * db(inode3)     + N4 * db(inode4)
        cl%b(ip)     = min(cl%b(ip),cl%h(ip))
-       cl%etot(ip)  = cl%etot(ip)  + N1 * detot(inode1)  + N2 * detot(inode2)  + N3 * detot(inode3)  + N4 * detot(inode4)
-       cl%erate(ip) = cl%erate(ip) + N1 * derate(inode1) + N2 * derate(inode2) + N3 * derate(inode3) + N4 * derate(inode4)
+       if (cl%h(ip)< sealevel) then
+         cl%etot(ip)  = 0.d0
+         cl%erate(ip) = 0.d0
+       else
+         cl%etot(ip)  = cl%etot(ip)  + N1 * detot(inode1)  + N2 * detot(inode2)  + N3 * detot(inode3)  + N4 * detot(inode4)
+         cl%erate(ip) = cl%erate(ip) + N1 * derate(inode1) + N2 * derate(inode2) + N3 * derate(inode3) + N4 * derate(inode4)
+       endif
     end do
   end do
   !$omp end parallel do

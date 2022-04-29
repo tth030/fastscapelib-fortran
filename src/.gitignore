@@ -1,5 +1,12 @@
 *.o
 *.mod
 *__genmod.f90
+.nfs*
 FastScape_run_f90
-Marine.f90_old
+FastScape_run2_f90
+FastScape_ctx.f90.old3
+Marine.f90.old
+Marine.f90.old2
+Marine.f90.old3
+Marine.f90.old4
+save

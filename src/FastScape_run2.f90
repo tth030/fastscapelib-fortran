@@ -211,7 +211,8 @@ call cpu_time (time_in)
     ! apply additional noise
     call FastScape_Copy_H (h,ierr);FSCAPE_CHKERR_ABORT(ierr)
     call random_number (h_init)
-    h = h + (h_init-0.5d0)*0.25d0
+    where (h>sealevel+0.125d0)  h = h + (h_init-0.5d0)*0.25d0
+    where (h<=sealevel+0.125d0 .and. h>=sealevel) h = h + h_init*0.125d0
     call FastScape_Set_H(h,ierr);FSCAPE_CHKERR_ABORT(ierr)
     
   enddo

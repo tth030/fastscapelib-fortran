@@ -68,4 +68,4 @@ RUNC: LIB
 	$(CC) -O FastScape_run.c -o FastScape_run_c -L. -lFastScape -lgfortran $(LIB_OPTION)
 
 clean:
-	rm *.o *.mod *.a
+	rm *.o *.mod *.a *__genmod.f90
