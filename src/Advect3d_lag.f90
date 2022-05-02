@@ -110,7 +110,7 @@ subroutine cloud_setup (ierr)
   np            = ncell*np_per_cell
   ndim          = 2
   mpe           = 2**ndim
-  grid%nmax     = int(96)
+  grid%nmax     = int(48)
   grid%nmin     = np_per_cell
 
   write(*,*) 'np_per_cell = ', np_per_cell
@@ -283,14 +283,15 @@ subroutine locate_cloud (ierr)
   if (sum(grid%nn)/=cl%npcl) stop 'pb in locate_cloud_points2D'
   
   if (allocated(grid%pair)) deallocate(grid%pair)
-  allocate(grid%pair(grid%nmax,ncell))
-  
+  !allocate(grid%pair(grid%nmax,ncell))
+  allocate(grid%pair(maxval(grid%nn),ncell))
+
   !write(*,'(a,2i15)') 'grid%nmax',grid%nmax
   
-  if (maxval(grid%nn)>grid%nmax) then
-    print*,'some cells have too many particles than grid%pair'
-    stop 'stop build pair'
-  endif
+  !if (maxval(grid%nn)>grid%nmax) then
+  !  print*,'some cells have too many particles than grid%pair'
+  !  stop 'stop build pair'
+  !endif
   
   !now it is safe to build grid%pair
   grid%nn = 0
