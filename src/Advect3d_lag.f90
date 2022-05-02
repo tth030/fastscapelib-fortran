@@ -422,6 +422,12 @@ subroutine update_cloud (ierr)
   logical left, top
   integer npcl_in_quadrant(4),chosen_quadrant(1), ichoice, k, k2, ii, k1, ndist, npcl_new
 
+  double precision distmin_per_quadrant(4)
+  integer ipart(4)
+  integer npart, jcell_k, icell_k, ic_k
+  integer counter_interpolated, counter_averaged, counter_closest
+  double precision N1, N2, N3, N4, r, s
+
   ierr    = 0
   ncelly  = ny-1
   ncellx  = nx-1
@@ -478,6 +484,9 @@ subroutine update_cloud (ierr)
     allocate(clinject%icy(ninject))
     allocate(clinject%icx(ninject))
     counter_inject=0
+    counter_interpolated=0
+    counter_averaged=0
+    counter_closest=0
     !loop elements
     ic=0
     do jcell=1,ncelly
@@ -592,21 +601,138 @@ subroutine update_cloud (ierr)
             if (nnic>0) then
                ichoice = grid%pair(1,ic)
                distmin = 1.d30
+               distmin_per_quadrant = 1.d30
+               ipart = -1
                do k=1,nnic
                   dist=(clinject%x(counter_inject)-cl%x(grid%pair(k,ic)))**2 + &
                        (clinject%y(counter_inject)-cl%y(grid%pair(k,ic)))**2 
                   if (dist<distmin) then
                      distmin=dist
                      ichoice=grid%pair(k,ic)
-                  end if 
+                  end if
+                  if ( cl%x(grid%pair(k,ic)) < clinject%x(counter_inject) .and. &
+                       cl%y(grid%pair(k,ic)) < clinject%y(counter_inject) .and. &
+                       dist < distmin_per_quadrant(1) ) then
+                     distmin_per_quadrant(1) = dist
+                     ipart(1)                = grid%pair(k,ic)
+                     cycle
+                  endif
+                  if ( cl%x(grid%pair(k,ic)) > clinject%x(counter_inject) .and. &
+                       cl%y(grid%pair(k,ic)) < clinject%y(counter_inject) .and. &
+                       dist < distmin_per_quadrant(2) ) then
+                     distmin_per_quadrant(2) = dist
+                     ipart(2)                = grid%pair(k,ic)
+                     cycle
+                  endif
+                  if ( cl%x(grid%pair(k,ic)) > clinject%x(counter_inject) .and. &
+                       cl%y(grid%pair(k,ic)) > clinject%y(counter_inject) .and. &
+                       dist < distmin_per_quadrant(3) ) then
+                     distmin_per_quadrant(3) = dist
+                     ipart(3)                = grid%pair(k,ic)
+                     cycle
+                  endif
+                  if ( cl%x(grid%pair(k,ic)) < clinject%x(counter_inject) .and. &
+                       cl%y(grid%pair(k,ic)) > clinject%y(counter_inject) .and. &
+                       dist < distmin_per_quadrant(4) ) then
+                     distmin_per_quadrant(4) = dist
+                     ipart(4)                = grid%pair(k,ic)
+                     cycle
+                  endif
                end do
+               npart = 0
+               do k=1,4
+                  if (ipart(k)>0) npart = npart + 1
+               enddo
+            else
+               write(*,*) "ERROR: nnic = 0 is not possible (update_cloud)"
+               stop 'nnic = 0 | not possible'
             endif !nnic>0
 
-            clinject%h(counter_inject)     = cl%h(ichoice)
-            clinject%b(counter_inject)     = cl%b(ichoice)
-            clinject%etot(counter_inject)  = cl%etot(ichoice)
-            clinject%erate(counter_inject) = cl%erate(ichoice)
+            if (npart<4) then
+              ! if no particle in a quadrant we find the closest particle in the
+              ! adjacent cell
+              do k=1,4
+                if (ipart(k)<0) then
+                  if (k==1) then
+                    icell_k = icell - 1
+                    jcell_k = jcell - 1
+                    if ((icell_k<1).or.(jcell_k<1)) cycle
+                  else if (k==2) then
+                    icell_k = icell + 1
+                    jcell_k = jcell - 1
+                    if ((icell_k>ncellx).or.(jcell_k<1)) cycle
+                  else if (k==3) then
+                    icell_k = icell + 1
+                    jcell_k = jcell + 1
+                    if ((icell_k>ncellx).or.(jcell_k>ncelly)) cycle
+                  else if (k==4) then
+                    icell_k = icell - 1
+                    jcell_k = jcell + 1
+                    if ((icell_k<1).or.(jcell_k>ncelly)) cycle
+                  endif
+                  ic_k      = (jcell_k-1)*ncellx+icell_k
+                  distmin   = 1.d30
+                  do ip=1,grid%nn(ic_k)
+                    dist=(clinject%x(counter_inject)-cl%x(grid%pair(ip,ic_k)))**2 + &
+                         (clinject%y(counter_inject)-cl%y(grid%pair(ip,ic_k)))**2
+                    if (dist<distmin) then
+                       distmin   = dist
+                       ipart(k)  = grid%pair(ip,ic_k)
+                    end if
+                  enddo
+                  npart = npart + 1
+                endif
+              enddo
+            endif
 
+            if (npart==4) then
+               counter_interpolated = counter_interpolated + 1
+               xip=clinject%x(counter_inject)
+               yip=clinject%y(counter_inject)
+
+               xmin=(cl%x(ipart(4))-cl%x(ipart(1)))/(cl%y(ipart(4))-cl%y(ipart(1)))*(yip-cl%y(ipart(1))) + cl%x(ipart(1))
+               xmax=(cl%x(ipart(3))-cl%x(ipart(2)))/(cl%y(ipart(3))-cl%y(ipart(2)))*(yip-cl%y(ipart(2))) + cl%x(ipart(2))
+               r=((xip-xmin)/(xmax-xmin) -0.5d0 ) *2.d0
+
+               ymin=(cl%y(ipart(2))-cl%y(ipart(1)))/(cl%x(ipart(2))-cl%x(ipart(1)))*(xip-cl%x(ipart(1))) + cl%y(ipart(1))
+               ymax=(cl%y(ipart(3))-cl%y(ipart(4)))/(cl%x(ipart(3))-cl%x(ipart(4)))*(xip-cl%x(ipart(4))) + cl%y(ipart(4))
+               s=((yip-ymin)/(ymax-ymin) -0.5d0 ) *2.d0
+               N1=0.25d0*(1.d0-r)*(1.d0-s) 
+               N2=0.25d0*(1.d0+r)*(1.d0-s) 
+               N3=0.25d0*(1.d0+r)*(1.d0+s) 
+               N4=0.25d0*(1.d0-r)*(1.d0+s) 
+               clinject%h(counter_inject)     = N1 * cl%h(ipart(1))     + N2 * cl%h(ipart(2))     + N3 * cl%h(ipart(3))     + N4 * cl%h(ipart(4))
+               clinject%b(counter_inject)     = N1 * cl%b(ipart(1))     + N2 * cl%b(ipart(2))     + N3 * cl%b(ipart(3))     + N4 * cl%b(ipart(4))
+               clinject%etot(counter_inject)  = N1 * cl%etot(ipart(1))  + N2 * cl%etot(ipart(2))  + N3 * cl%etot(ipart(3))  + N4 * cl%etot(ipart(4))
+               clinject%erate(counter_inject) = N1 * cl%erate(ipart(1)) + N2 * cl%erate(ipart(2)) + N3 * cl%erate(ipart(3)) + N4 * cl%erate(ipart(4))
+            else
+!               counter_averaged = counter_averaged + 1
+!               clinject%h(counter_inject)     = 0.0
+!               clinject%b(counter_inject)     = 0.0
+!               clinject%etot(counter_inject)  = 0.0
+!               clinject%erate(counter_inject) = 0.0
+!               do k=1,4
+!                  if (ipart(k)>0) then
+!                    clinject%h(counter_inject) = clinject%h(counter_inject) + cl%h(ipart(k))/distmin_per_quadrant(k)
+!                    clinject%b(counter_inject) = clinject%b(counter_inject) + cl%b(ipart(k))/distmin_per_quadrant(k)
+!                    clinject%etot(counter_inject) = clinject%etot(counter_inject) + cl%etot(ipart(k))/distmin_per_quadrant(k)
+!                    clinject%erate(counter_inject) = clinject%erate(counter_inject) + cl%erate(ipart(k))/distmin_per_quadrant(k)
+!                    N1 = N1 + (1/distmin_per_quadrant(k))
+!                  endif
+!               enddo
+!               clinject%h(counter_inject)     = clinject%h(counter_inject)/N1
+!               clinject%b(counter_inject)     = clinject%b(counter_inject)/N1
+!               clinject%etot(counter_inject)  = clinject%etot(counter_inject)/N1
+!               clinject%erate(counter_inject) = clinject%erate(counter_inject)/N1               
+
+               counter_closest                = counter_closest + 1
+               clinject%h(counter_inject)     = cl%h(ichoice)
+               clinject%b(counter_inject)     = cl%b(ichoice)
+               clinject%etot(counter_inject)  = cl%etot(ichoice)
+               clinject%erate(counter_inject) = cl%erate(ichoice)
+            endif
+
+            clinject%b(counter_inject)      = min(clinject%b(counter_inject),clinject%h(counter_inject))            
             clinject%cell(counter_inject)   = cl%cell(ichoice)
             clinject%active(counter_inject) = cl%active(ichoice)
             clinject%icy(counter_inject)    = cl%icy(ichoice)
@@ -617,6 +743,11 @@ subroutine update_cloud (ierr)
     enddo
     enddo
     if (counter_inject /= ninject) stop 'pb inject in update_cloud_structure'
+    write(*,'(a,F7.3,a,F7.3,a,F7.3,a)') 'Method for interpolation during injection: shape function = ', (float(counter_interpolated)/float(ninject))*100.d0, &
+                                        ' %, average = ', (float(counter_averaged)/float(ninject))*100.d0, &
+                                        ' %, closest = ', (float(counter_closest)/float(ninject))*100.d0,' %'
+
+
   endif !if (ninject>0)
 
     
