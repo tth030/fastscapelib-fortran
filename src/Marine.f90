@@ -41,73 +41,77 @@ subroutine Marine(ierr)
   ! computing flux from continental erosion
   flux=0.d0
   where (h.gt.sealevel) flux=Sedflux
-  do ij=nn,1,-1
-    ijk=stack(ij)
-    ijr=rec(ijk)
-    if (ijr.ne.ijk.and.h(ijk).gt.sealevel) then
-      flux(ijr)=flux(ijr)+flux(ijk)
-    endif
-  enddo
-  ! here the integral of erosion/deposition has been done
-  ! and distributed as flux to ocean
-  where (h.gt.sealevel) flux=0.d0
 
-  ! set nodes at transition between ocean and continent
-  !where (flux.gt.tiny(flux)) flag=1
-
-  ! decompact volume of pure solid phase (silt and sand) from onshore
-  ratio1=ratio/(1.d0-poro1)
-  ratio2=(1.d0-ratio)/(1.d0-poro2)
-  ! total volume of silt and sand after decompaction
-  flux=flux*(ratio1+ratio2)
-
-  ! modifications made by Jean for multiple flow to distribute continental flux to ocean on the shelf
-  ! Dec 2018
-  !write(*,*)'before find_mult_rec'
-
-  allocate (mmrec(8,nn),mmnrec(nn),mmwrec(8,nn),mmlrec(8,nn),mmstack(nn),mwater(nn))
-
-  call find_mult_rec (h,rec,stack,mwater,mmrec,mmnrec,mmwrec,mmlrec,mmstack,nx,ny,dx,dy,0.d0,p_mfd_exp, &
-    bounds_i1, bounds_i2, bounds_j1, bounds_j2, bounds_xcyclic, bounds_ycyclic, ierr)
-
-  !write(*,*)'after find_mult_rec'
-  !print*,count(flux>0.and.mmnrec==0),count(flux>0),count(mmstack==0)
-
-  ! modifications made by Jean
-  ! to compute shelf depth
-  shelfdepth=sealevel
-  shelfslope=-1.d-4
-  do ij=1,nn
-    ijk=mmstack(ij)
-    do k=1,mmnrec(ijk)
-      ijr=mmrec(k,ijk)
-      if (h(ijk).lt.sealevel) then
-        shelfdepth(ijr)=min(shelfdepth(ijr),shelfdepth(ijk)+mmlrec(k,ijk)*shelfslope)
-        shelfdepth(ijr)=max(shelfdepth(ijr),h(ijr))
+  if ( .not. runSPL ) then
+    do ij=nn,1,-1
+      ijk=stack(ij)
+      ijr=rec(ijk)
+      if (ijr.ne.ijk.and.h(ijk).gt.sealevel) then
+        flux(ijr)=flux(ijr)+flux(ijk)
       endif
     enddo
-  enddo
-  ! end modifications
-
-  ! passes the flux across the shelf
-  ! modifications made by Jean
-
-  where (h.lt.sealevel) flux=flux+(h-shelfdepth)
-  do ij=1,nn
-    ijk=mmstack(ij)
-    do k=1,mmnrec(ijk)
-      ijr=mmrec(k,ijk)
-      flux(ijr)=flux(ijr)+max(0.d0,flux(ijk)*mmwrec(k,ijk))
+    ! here the integral of erosion/deposition has been done
+    ! and distributed as flux to ocean
+    where (h.gt.sealevel) flux=0.d0
+  
+    ! set nodes at transition between ocean and continent
+    !where (flux.gt.tiny(flux)) flag=1
+  
+    ! decompact volume of pure solid phase (silt and sand) from onshore
+    ratio1=ratio/(1.d0-poro1)
+    ratio2=(1.d0-ratio)/(1.d0-poro2)
+    ! total volume of silt and sand after decompaction
+    flux=flux*(ratio1+ratio2)
+  
+    ! modifications made by Jean for multiple flow to distribute continental flux to ocean on the shelf
+    ! Dec 2018
+    !write(*,*)'before find_mult_rec'
+  
+    allocate (mmrec(8,nn),mmnrec(nn),mmwrec(8,nn),mmlrec(8,nn),mmstack(nn),mwater(nn))
+  
+    call find_mult_rec (h,rec,stack,mwater,mmrec,mmnrec,mmwrec,mmlrec,mmstack,nx,ny,dx,dy,0.d0,p_mfd_exp, &
+      bounds_i1, bounds_i2, bounds_j1, bounds_j2, bounds_xcyclic, bounds_ycyclic, ierr)
+  
+    !write(*,*)'after find_mult_rec'
+    !print*,count(flux>0.and.mmnrec==0),count(flux>0),count(mmstack==0)
+  
+    ! modifications made by Jean
+    ! to compute shelf depth
+    shelfdepth=sealevel
+    shelfslope=-1.d-4
+    do ij=1,nn
+      ijk=mmstack(ij)
+      do k=1,mmnrec(ijk)
+        ijr=mmrec(k,ijk)
+        if (h(ijk).lt.sealevel) then
+          shelfdepth(ijr)=min(shelfdepth(ijr),shelfdepth(ijk)+mmlrec(k,ijk)*shelfslope)
+          shelfdepth(ijr)=max(shelfdepth(ijr),h(ijr))
+        endif
+      enddo
     enddo
-  enddo
-  ! modifications made by Jean
-
-  deallocate (mmrec,mmnrec,mmwrec,mmlrec,mmstack,mwater)
-
-  where (flux.gt.0.d0.and.h.lt.sealevel) flux=-(h-shelfdepth)
-  where (flux.le.0.d0.and.h.lt.sealevel) flux=flux-(h-shelfdepth)
-  where (h.ge.sealevel) flux=0.d0
-  flux=max(flux,0.d0)
+    ! end modifications
+  
+    ! passes the flux across the shelf
+    ! modifications made by Jean
+  
+    where (h.lt.sealevel) flux=flux+(h-shelfdepth)
+    do ij=1,nn
+      ijk=mmstack(ij)
+      do k=1,mmnrec(ijk)
+        ijr=mmrec(k,ijk)
+        flux(ijr)=flux(ijr)+max(0.d0,flux(ijk)*mmwrec(k,ijk))
+      enddo
+    enddo
+    ! modifications made by Jean
+  
+    deallocate (mmrec,mmnrec,mmwrec,mmlrec,mmstack,mwater)
+  
+    where (flux.gt.0.d0.and.h.lt.sealevel) flux=-(h-shelfdepth)
+    where (flux.le.0.d0.and.h.lt.sealevel) flux=flux-(h-shelfdepth)
+    where (h.ge.sealevel) flux=0.d0
+    flux=max(flux,0.d0)
+  
+  endif
 
   ! silt fraction (after decompaction) in shelf
   Fs=0.d0

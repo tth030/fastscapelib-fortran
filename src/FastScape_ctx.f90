@@ -174,6 +174,7 @@ module FastScapeContext
     b = h
     bprev = b
     Sedflux = 0.d0
+    rec = 0.d0
     precip = 1.d0
     p_mfd_exp(1:nn) = 1.d0
     call random_number (catch0)
@@ -330,10 +331,12 @@ module FastScapeContext
     dx=xl/(nx-1)
     dy=yl/(ny-1)
     a0=dx*dy*10.d0
-    do ij=1,nn
-      ijk=stack(ij)
-      if (a(ijk).gt.a0) chi(ijk)=chi(rec(ijk))+(a0/a(ijk))**(m/n)*length(ijk)
-    enddo
+    if (runSPL) then
+      do ij=1,nn
+        ijk=stack(ij)
+        if (a(ijk).gt.a0) chi(ijk)=chi(rec(ijk))+(a0/a(ijk))**(m/n)*length(ijk)
+      enddo
+    endif
     chip(1:nn)=chi
     deallocate(chi)
 
