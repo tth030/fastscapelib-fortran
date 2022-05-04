@@ -422,7 +422,7 @@ subroutine update_cloud (ierr)
   logical left, top
   integer npcl_in_quadrant(4),chosen_quadrant(1), ichoice, k, k2, ii, k1, ndist, npcl_new
 
-  double precision distmin_per_quadrant(4)
+  double precision distmin_per_quadrant(4), dx, dy, refdist
   integer ipart(4)
   integer npart, jcell_k, icell_k, ic_k
   integer counter_interpolated, counter_averaged, counter_closest
@@ -432,6 +432,10 @@ subroutine update_cloud (ierr)
   ncelly  = ny-1
   ncellx  = nx-1
   ncell   = ncellx*ncelly
+
+  dx      = xl/(nx-1)
+  dy      = yl/(ny-1)
+  refdist = sqrt(dx**2+dy**2)
 
   ninject = 0
   nremove = 0
@@ -706,30 +710,31 @@ subroutine update_cloud (ierr)
                clinject%etot(counter_inject)  = N1 * cl%etot(ipart(1))  + N2 * cl%etot(ipart(2))  + N3 * cl%etot(ipart(3))  + N4 * cl%etot(ipart(4))
                clinject%erate(counter_inject) = N1 * cl%erate(ipart(1)) + N2 * cl%erate(ipart(2)) + N3 * cl%erate(ipart(3)) + N4 * cl%erate(ipart(4))
             else
-!               counter_averaged = counter_averaged + 1
-!               clinject%h(counter_inject)     = 0.0
-!               clinject%b(counter_inject)     = 0.0
-!               clinject%etot(counter_inject)  = 0.0
-!               clinject%erate(counter_inject) = 0.0
-!               do k=1,4
-!                  if (ipart(k)>0) then
-!                    clinject%h(counter_inject) = clinject%h(counter_inject) + cl%h(ipart(k))/distmin_per_quadrant(k)
-!                    clinject%b(counter_inject) = clinject%b(counter_inject) + cl%b(ipart(k))/distmin_per_quadrant(k)
-!                    clinject%etot(counter_inject) = clinject%etot(counter_inject) + cl%etot(ipart(k))/distmin_per_quadrant(k)
-!                    clinject%erate(counter_inject) = clinject%erate(counter_inject) + cl%erate(ipart(k))/distmin_per_quadrant(k)
-!                    N1 = N1 + (1/distmin_per_quadrant(k))
-!                  endif
-!               enddo
-!               clinject%h(counter_inject)     = clinject%h(counter_inject)/N1
-!               clinject%b(counter_inject)     = clinject%b(counter_inject)/N1
-!               clinject%etot(counter_inject)  = clinject%etot(counter_inject)/N1
-!               clinject%erate(counter_inject) = clinject%erate(counter_inject)/N1               
+               counter_averaged = counter_averaged + 1
+               clinject%h(counter_inject)     = 0.d0
+               clinject%b(counter_inject)     = 0.d0
+               clinject%etot(counter_inject)  = 0.d0
+               clinject%erate(counter_inject) = 0.d0
+               N1 = 0.d0
+               do k=1,4
+                  if (ipart(k)>0) then
+                    clinject%h(counter_inject) = clinject%h(counter_inject) + cl%h(ipart(k))*refdist/distmin_per_quadrant(k)
+                    clinject%b(counter_inject) = clinject%b(counter_inject) + cl%b(ipart(k))*refdist/distmin_per_quadrant(k)
+                    clinject%etot(counter_inject) = clinject%etot(counter_inject) + cl%etot(ipart(k))*refdist/distmin_per_quadrant(k)
+                    clinject%erate(counter_inject) = clinject%erate(counter_inject) + cl%erate(ipart(k))*refdist/distmin_per_quadrant(k)
+                    N1 = N1 + (refdist/distmin_per_quadrant(k))
+                  endif
+               enddo
+               clinject%h(counter_inject)     = clinject%h(counter_inject)/N1
+               clinject%b(counter_inject)     = clinject%b(counter_inject)/N1
+               clinject%etot(counter_inject)  = clinject%etot(counter_inject)/N1
+               clinject%erate(counter_inject) = clinject%erate(counter_inject)/N1               
 
-               counter_closest                = counter_closest + 1
-               clinject%h(counter_inject)     = cl%h(ichoice)
-               clinject%b(counter_inject)     = cl%b(ichoice)
-               clinject%etot(counter_inject)  = cl%etot(ichoice)
-               clinject%erate(counter_inject) = cl%erate(ichoice)
+!               counter_closest                = counter_closest + 1
+!               clinject%h(counter_inject)     = cl%h(ichoice)
+!               clinject%b(counter_inject)     = cl%b(ichoice)
+!               clinject%etot(counter_inject)  = cl%etot(ichoice)
+!               clinject%erate(counter_inject) = cl%erate(ichoice)
             endif
 
             clinject%b(counter_inject)      = min(clinject%b(counter_inject),clinject%h(counter_inject))            
