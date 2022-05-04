@@ -1073,6 +1073,7 @@ module FastScapeContext
     logical, intent(in) :: runLagToEulp
 
     runLagToEul = runLagToEulp
+    runAdvect3d = .true.
 
     return
 
