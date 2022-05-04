@@ -173,6 +173,7 @@ module FastScapeContext
     etotprev = 0.d0
     b = h
     bprev = b
+    Sedflux = 0.d0
     precip = 1.d0
     p_mfd_exp(1:nn) = 1.d0
     call random_number (catch0)
