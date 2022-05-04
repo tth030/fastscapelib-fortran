@@ -40,6 +40,12 @@ module FastScapeContext
   double precision, target, dimension(:), allocatable :: dh_dep, sedflux_shore
   double precision, target, dimension(:), allocatable :: p_mfd_exp
   double precision, dimension(:,:), pointer, contiguous :: h2, vx2, vy2, u2, etot2, b2
+
+  !TT leapgrog advection scheme ----
+  double precision, target, dimension(:), allocatable :: hprev, etotprev, bprev
+  double precision, dimension(:,:), pointer, contiguous :: h2prev, etot2prev, b2prev 
+  !----------------------------------
+
   double precision :: xl, yl, dt, kfsed, m, n, kdsed, g1, g2, p
   double precision :: totaltime,totaltime_before_advection
   double precision :: sealevel, poro1, poro2, zporo1, zporo2, ratio, layer, kdsea1, kdsea2
@@ -133,6 +139,7 @@ module FastScapeContext
 
     call Destroy()
     allocate (h(nn),u(nn),vx(nn),vy(nn),stack(nn),ndon(nn),rec(nn),don(8,nn),catch0(nn),catch(nn),precip(nn))
+    allocate (hprev(nn),bprev(nn),etotprev(nn))
     allocate (g(nn))
     allocate (bounds_bc(nn))
     allocate (p_mfd_exp(nn))
@@ -148,17 +155,24 @@ module FastScapeContext
     u2(1:nx,1:ny) => u
     etot2(1:nx,1:ny) => etot
 
+    h2prev(1:nx,1:ny) => hprev
+    b2prev(1:nx,1:ny) => bprev
+    etot2prev(1:nx,1:ny) => etotprev
+
     call SetBC (1111)
     call random_number (h)
     h(1:nx) = 0.d0
     h(nx*(ny-1)+1:nx*ny) = 0.d0
     h(1:nx*ny:nx) = 0.d0
     h(nx:nx*ny:nx) = 0.d0
+    hprev = h
     u = 0.d0
     vx = 0.d0
     vy = 0.d0
     etot = 0.d0
+    etotprev = 0.d0
     b = h
+    bprev = b
     precip = 1.d0
     p_mfd_exp(1:nn) = 1.d0
     call random_number (catch0)
@@ -407,6 +421,7 @@ module FastScapeContext
     double precision, intent(in), dimension(*) :: hp
 
     h = hp(1:nn)
+    hprev = h
     b = h
 
     return
@@ -430,6 +445,7 @@ module FastScapeContext
   subroutine ResetCumulativeErosion ()
 
     etot = 0.d0
+    etotprev = 0.d0
 
     return
 
@@ -699,8 +715,8 @@ module FastScapeContext
     double precision, intent(in) :: ux(*),uy(*)
     integer i
 
-    !runAdvect = .true.
-    runAdvect3d = .true.
+    runAdvect = .true.
+    !runAdvect3d = .true.
 
     do i=1,nn
       vx(i) = ux(i)
@@ -1080,6 +1096,7 @@ module FastScapeContext
     double precision, intent(in), dimension(*) :: etotp
 
     etot=etotp(1:nn)
+    etotprev=etotp(1:nn)
 
     return
 

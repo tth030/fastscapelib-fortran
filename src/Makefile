@@ -37,6 +37,8 @@ Diffusion.o \
 LocalMinima.o \
 Advect.o \
 Advect_p.o \
+Advect_laxwendroff.o \
+Advect_leapfrog.o \
 Advect3d.o \
 Advect3d_p.o \
 Advect3d_lag.o \
