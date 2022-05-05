@@ -157,7 +157,7 @@ if (use_advection==1) then
   enddo
   call FastScape_Set_V (ux,uy,ierr);FSCAPE_CHKERR_ABORT(ierr)
   
-  call FastScape_Set_RunLagToEul(.true.,ierr)
+  !call FastScape_Set_RunLagToEul(.true.,ierr)
 endif
 
 nstep=30e3

@@ -41,7 +41,7 @@ module FastScapeContext
   double precision, target, dimension(:), allocatable :: p_mfd_exp
   double precision, dimension(:,:), pointer, contiguous :: h2, vx2, vy2, u2, etot2, b2
 
-  !TT leapgrog advection scheme ----
+  !TT leapfrog advection scheme ----
   double precision, target, dimension(:), allocatable :: hprev, etotprev, bprev
   double precision, dimension(:,:), pointer, contiguous :: h2prev, etot2prev, b2prev 
   !----------------------------------
@@ -165,7 +165,6 @@ module FastScapeContext
     h(nx*(ny-1)+1:nx*ny) = 0.d0
     h(1:nx*ny:nx) = 0.d0
     h(nx:nx*ny:nx) = 0.d0
-    hprev = h
     u = 0.d0
     vx = 0.d0
     vy = 0.d0
@@ -425,7 +424,6 @@ module FastScapeContext
     double precision, intent(in), dimension(*) :: hp
 
     h = hp(1:nn)
-    hprev = h
     b = h
 
     return
