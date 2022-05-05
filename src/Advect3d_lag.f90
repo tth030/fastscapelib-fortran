@@ -648,8 +648,11 @@ subroutine update_cloud (ierr)
                   if (ipart(k)>0) npart = npart + 1
                enddo
             else
-               write(*,*) "ERROR: nnic = 0 is not possible (update_cloud)"
-               stop 'nnic = 0 | not possible'
+               ipart   = -1
+               npart   = 0
+               ichoice = -1
+               write(*,*) "WARNING: nnic = 0 (update_cloud)"
+               !stop 'nnic = 0 | not possible'
             endif !nnic>0
 
             if (npart<4) then
@@ -737,11 +740,15 @@ subroutine update_cloud (ierr)
 !               clinject%erate(counter_inject) = cl%erate(ichoice)
             endif
 
-            clinject%b(counter_inject)      = min(clinject%b(counter_inject),clinject%h(counter_inject))            
-            clinject%cell(counter_inject)   = cl%cell(ichoice)
-            clinject%active(counter_inject) = cl%active(ichoice)
-            clinject%icy(counter_inject)    = cl%icy(ichoice)
-            clinject%icx(counter_inject)    = cl%icx(ichoice)
+            clinject%b(counter_inject)      = min(clinject%b(counter_inject),clinject%h(counter_inject))
+            !clinject%cell(counter_inject)   = cl%cell(ichoice)
+            !clinject%active(counter_inject) = cl%active(ichoice)
+            !clinject%icy(counter_inject)    = cl%icy(ichoice)
+            !clinject%icx(counter_inject)    = cl%icx(ichoice)
+            clinject%cell(counter_inject)   = ic
+            clinject%active(counter_inject) = .true.
+            clinject%icy(counter_inject)    = jcell
+            clinject%icx(counter_inject)    = icell
 
          end do !end ii to ninject
        endif ! if (ninject_per_cell(ic) > 0)
