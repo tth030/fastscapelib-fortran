@@ -132,7 +132,8 @@ call FastScape_Init_H (h,ierr);FSCAPE_CHKERR_ABORT(ierr)
 if (use_advection==1) then
   u = 0.d0
   call FastScape_Set_U (u,ierr);FSCAPE_CHKERR_ABORT(ierr)
-  
+ 
+  ! E-W extension 
   vel = 0.5e-2 
   uy  = 0.d0
   ux  = -vel
@@ -155,6 +156,35 @@ if (use_advection==1) then
       endif
     enddo
   enddo
+
+!  ! oblique extension
+!  vel = 0.35356e-2
+!  uy  = -vel
+!  ux  = -vel
+!  do j=1,ny
+!    do i=1,nx
+!      ij=(j-1)*nx+i
+!      xpos = (i-1)*dx
+!      ypos = (j-1)*dy
+!      if (xpos > 2100e3 .and. ypos <= 295e3) then
+!          ux(ij) = vel
+!          uy(ij) = vel
+!      endif
+!      if (xpos > 1530e3 .and. ypos > 295e3 .and. ypos <= 600e3) then
+!          ux(ij) = vel
+!          uy(ij) = vel
+!      endif
+!      if (xpos >  870e3 .and. ypos > 600e3 .and. ypos <= 900e3) then
+!          ux(ij) = vel
+!          uy(ij) = vel
+!      endif
+!      if (xpos >  300e3 .and. ypos > 900e3 .and. ypos <= 1200e3) then
+!          ux(ij) = vel
+!          uy(ij) = vel
+!      endif
+!    enddo
+!  enddo
+
   call FastScape_Set_V (ux,uy,ierr);FSCAPE_CHKERR_ABORT(ierr)
   
   !call FastScape_Set_RunLagToEul(.true.,ierr)

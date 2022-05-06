@@ -42,8 +42,10 @@ module FastScapeContext
   double precision, dimension(:,:), pointer, contiguous :: h2, vx2, vy2, u2, etot2, b2
 
   !TT leapfrog advection scheme ----
-  double precision, target, dimension(:), allocatable :: hprev, etotprev, bprev
-  double precision, dimension(:,:), pointer, contiguous :: h2prev, etot2prev, b2prev 
+  double precision, target, dimension(:), allocatable :: hprev_x, etotprev_x, bprev_x
+  double precision, dimension(:,:), pointer, contiguous :: h2prev_x, etot2prev_x, b2prev_x 
+  double precision, target, dimension(:), allocatable :: hprev_y, etotprev_y, bprev_y
+  double precision, dimension(:,:), pointer, contiguous :: h2prev_y, etot2prev_y, b2prev_y 
   !----------------------------------
 
   double precision :: xl, yl, dt, kfsed, m, n, kdsed, g1, g2, p
@@ -139,7 +141,8 @@ module FastScapeContext
 
     call Destroy()
     allocate (h(nn),u(nn),vx(nn),vy(nn),stack(nn),ndon(nn),rec(nn),don(8,nn),catch0(nn),catch(nn),precip(nn))
-    allocate (hprev(nn),bprev(nn),etotprev(nn))
+    allocate (hprev_x(nn),bprev_x(nn),etotprev_x(nn))
+    allocate (hprev_y(nn),bprev_y(nn),etotprev_y(nn))
     allocate (g(nn))
     allocate (bounds_bc(nn))
     allocate (p_mfd_exp(nn))
@@ -155,9 +158,13 @@ module FastScapeContext
     u2(1:nx,1:ny) => u
     etot2(1:nx,1:ny) => etot
 
-    h2prev(1:nx,1:ny) => hprev
-    b2prev(1:nx,1:ny) => bprev
-    etot2prev(1:nx,1:ny) => etotprev
+    h2prev_x(1:nx,1:ny) => hprev_x
+    b2prev_x(1:nx,1:ny) => bprev_x
+    etot2prev_x(1:nx,1:ny) => etotprev_x
+
+    h2prev_y(1:nx,1:ny) => hprev_y
+    b2prev_y(1:nx,1:ny) => bprev_y
+    etot2prev_y(1:nx,1:ny) => etotprev_y
 
     call SetBC (1111)
     call random_number (h)
@@ -169,9 +176,7 @@ module FastScapeContext
     vx = 0.d0
     vy = 0.d0
     etot = 0.d0
-    etotprev = 0.d0
     b = h
-    bprev = b
     Sedflux = 0.d0
     rec = 0.d0
     precip = 1.d0
@@ -447,7 +452,6 @@ module FastScapeContext
   subroutine ResetCumulativeErosion ()
 
     etot = 0.d0
-    etotprev = 0.d0
 
     return
 
@@ -1099,7 +1103,6 @@ module FastScapeContext
     double precision, intent(in), dimension(*) :: etotp
 
     etot=etotp(1:nn)
-    etotprev=etotp(1:nn)
 
     return
 
