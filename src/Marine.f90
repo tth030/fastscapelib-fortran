@@ -29,6 +29,8 @@ subroutine Marine(ierr)
   double precision Ap,Bp,Cp,Dp,Ep,Mp,Np
   !TT -------------------------------------------
 
+  if (any(h<sealevel)) then
+
   allocate (flux(nn),shelfdepth(nn),ht(nn),Fs(nn),dh(nn),dh1(nn),dh2(nn),Fmixt(nn),flag(nn))
   allocate (dhs(nn),dhs1(nn),F1(nn),F2(nn),zi(nn),zo(nn))
 
@@ -595,6 +597,8 @@ subroutine Marine(ierr)
   where (dh > 0.0d0 .and. h <= sealevel ) rock_type = 3 ! marine sed.
 
   deallocate (flux,shelfdepth,ht,Fs,dh,dh1,dh2,Fmixt)
+
+  endif ! if seas
 
   return
 
