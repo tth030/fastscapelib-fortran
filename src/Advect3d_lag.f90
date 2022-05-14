@@ -2,6 +2,7 @@
 subroutine Advect3d_lag (ierr)
 
   use FastScapeContext
+  use omp_lib
 
   ! routine to advect the topography (h), basement (hb) and total erosion(etot)
   ! by a velocity field vx, vy, vz known at the same locations on a rectangular
@@ -11,6 +12,7 @@ subroutine Advect3d_lag (ierr)
 
   integer ierr
   double precision dx,dy,advect_dt
+  double precision :: dtime_in, dtime_out
 
   dx=xl/(nx-1)
   dy=yl/(ny-1)
@@ -25,15 +27,33 @@ subroutine Advect3d_lag (ierr)
   !  write(*,'(a,x,i6,x,f9.3,x,f13.3,x,f13.3)') 'Advection 3d step,advect_dt',step,advect_dt,totaltime,totaltime_before_advection
   totaltime_before_advection=totaltime
 
+  write(*,*) '================= start advection ======================'
+  dtime_in = omp_get_wtime()
   call advect_cloud(advect_dt,ierr)
+  dtime_out = omp_get_wtime()
+  write(*,*) 'advect_cloud ',dtime_out-dtime_in,' s'
 
+  dtime_in = omp_get_wtime()
   call locate_cloud(ierr)
+  dtime_out = omp_get_wtime()
+  write(*,*) 'locate_cloud ',dtime_out-dtime_in,' s'
 
+  dtime_in = omp_get_wtime()
   call update_cloud(ierr)
+  dtime_out = omp_get_wtime()
+  write(*,*) 'update_cloud ',dtime_out-dtime_in,' s'
 
-  call locate_cloud(ierr)
+!  dtime_in = omp_get_wtime()
+!  call locate_cloud(ierr)
+!  dtime_out = omp_get_wtime()
+!  write(*,*) 'locate_cloud ',dtime_out-dtime_in,' s'
 
+  dtime_in = omp_get_wtime()
   call cloud_to_eul(ierr)
+  dtime_out = omp_get_wtime()
+  write(*,*) 'cloud_to_eul ',dtime_out-dtime_in,' s'
+
+  write(*,*) '================= end advection ======================'
 
   !call write_cell(2410)
 
@@ -110,8 +130,8 @@ subroutine cloud_setup (ierr)
   np            = ncell*np_per_cell
   ndim          = 2
   mpe           = 2**ndim
-  grid%nmax     = int(48)
-  grid%nmin     = np_per_cell
+  grid%nmax     = int(38) !int(48)
+  grid%nmin     = int(9)  !np_per_cell
 
   write(*,*) 'np_per_cell = ', np_per_cell
 
@@ -215,6 +235,12 @@ subroutine advect_cloud (advect_dt,ierr)
   dx    = xl/(nx-1)
   dy    = yl/(ny-1)
 
+  if (allocated(cl%ip_leaving)) deallocate(cl%ip_leaving)
+  allocate(cl%ip_leaving(cl%npcl))
+
+  cl%nleaving   = 0
+  cl%ip_leaving = 0
+
   !$omp parallel do shared(ncell,grid,cl,vx,vy,u) private(ic,inode1,inode2,inode3,inode4,xnode1,i,ip,xip,r,ymin,ymax,s,N1,N2,N3,N4)
   do ic=1,ncell
     inode1=grid%icon(1,ic)
@@ -236,6 +262,15 @@ subroutine advect_cloud (advect_dt,ierr)
        cl%x(ip)=cl%x(ip)+advect_dt*(N1 * vx(inode1) + N2 * vx(inode2) + N3 * vx(inode3) + N4 * vx(inode4))
        cl%y(ip)=cl%y(ip)+advect_dt*(N1 * vy(inode1) + N2 * vy(inode2) + N3 * vy(inode3) + N4 * vy(inode4))
        cl%h(ip)=cl%h(ip)+advect_dt*(N1 * u(inode1)  + N2 * u(inode2)  + N3 * u(inode3)  + N4 * u(inode4))
+
+       if (cl%x(ip)>grid%x(grid%icon(2,ic)) .or. cl%x(ip)<grid%x(grid%icon(1,ic)) .or. &
+           cl%y(ip)>grid%y(grid%icon(3,ic)) .or. cl%y(ip)<grid%y(grid%icon(1,ic)) ) then
+              !$omp critical
+              cl%nleaving                = cl%nleaving + 1
+              cl%ip_leaving(cl%nleaving) = ip
+              !$omp end critical
+       endif
+
     end do
   end do
   !$omp end parallel do
@@ -255,31 +290,64 @@ subroutine locate_cloud (ierr)
   integer, intent(out) :: ierr
   integer ncell, ip, ic
 
+  integer i, icx, icy, ncellx, ncelly
+  double precision dx, dy
+
   ierr = 0
 
-  ncell = (nx-1)*(ny-1)
+  if ( cl%nleaving > 0 ) then
 
-  if (allocated(cl%cell)  ) deallocate(cl%cell  )
+  ncellx = nx-1
+  ncelly = ny-1
+  ncell  = ncellx*ncelly
+
+!  if (allocated(cl%cell)  ) deallocate(cl%cell  )
   if (allocated(cl%active)) deallocate(cl%active)
   
-  allocate(cl%cell  (cl%npcl))
+!  allocate(cl%cell  (cl%npcl))
   allocate(cl%active(cl%npcl))
   cl%active=.true.
   
-  call search_cell2D (cl%npcl,cl%x,cl%y,cl%cell,cl%icy,cl%active,ierr)
-  
-  write(*,'(a,2i15)')    'nb points outside ', cl%npcl-count(cl%active)
+  !call search_cell2D (cl%npcl,cl%x,cl%y,cl%cell,cl%icy,cl%active,ierr)
+  !TT update AAA 
+  dx     = xl/(nx-1)
+  dy     = yl/(ny-1)
+  !write(*,'(a,2i15)')    'before sum(grid%nn), cl%npcl :', sum(grid%nn), cl%npcl
+  !$omp parallel do shared(cl,grid,dx,dy) private(i,ip,icx,icy,ic)
+  do i=1,cl%nleaving
+     ip = cl%ip_leaving(i)
+     icx=floor(cl%x(ip)/dx)+1
+     icy=floor(cl%y(ip)/dy)+1
+     if (icx>ncellx .or. icx<1 .or. icy>ncelly .or. icy<1) then
+       cl%active(ip)        = .false.
+       grid%nn(cl%cell(ip)) = grid%nn(cl%cell(ip)) - 1
+       cycle
+     endif
+     ic = icx + (icy-1)*ncellx
+     !$omp critical
+     grid%nn(cl%cell(ip)) = grid%nn(cl%cell(ip)) - 1     
+     grid%nn(ic)          = grid%nn(ic) + 1
+     !$omp end critical
+     cl%icy(ip)           = icy
+     cl%cell(ip)          = ic
+  enddo
+  !$omp end parallel do
+
+  write(*,'(a,1i15)')    'nb points changing cell :', cl%nleaving
+  write(*,'(a,1i15)')    'nb points outside       :', cl%npcl-count(cl%active)
   
   if (count(cl%active)<cl%npcl) then
     call cloud_trim (ierr)
   endif
   
+  !TT This loops is not needed anymore after the update AAA
   !build cell to particle mapping
-  grid%nn = 0
-  do ip=1,cl%npcl
-    ic          = cl%cell(ip)
-    grid%nn(ic) = grid%nn(ic) + 1
-  enddo
+  !grid%nn = 0
+  !do ip=1,cl%npcl
+  !  ic          = cl%cell(ip)
+  !  grid%nn(ic) = grid%nn(ic) + 1
+  !enddo
+  !write(*,'(a,2i15)')    'after  sum(grid%nn), cl%npcl :', sum(grid%nn), cl%npcl
   if (sum(grid%nn)/=cl%npcl) stop 'pb in locate_cloud_points2D'
   
   if (allocated(grid%pair)) deallocate(grid%pair)
@@ -300,8 +368,10 @@ subroutine locate_cloud (ierr)
     grid%nn(ic)                   = grid%nn(ic) + 1
     grid%pair(grid%nn(ic),ic)     = ip
   enddo
-  
+
   write(*,'(a,2i15)')    'located grid%nn min/max',minval(grid%nn),maxval(grid%nn)
+
+  endif ! cl%nleaving > 0
     
   return
 
@@ -402,6 +472,407 @@ end subroutine cloud_trim
 !--------------------------------------------------------------------------
 
 subroutine update_cloud (ierr)
+
+  use FastScapeContext
+
+  implicit none
+
+  integer, intent(out) :: ierr
+  integer ic, jcell, icell, ncellx, ncelly, ncell, nnic, npcl_max, npcl_min
+  integer ninject, nremove, counter_inject
+  integer ip
+  integer, dimension(:), allocatable :: ninject_per_cell
+  integer, dimension(:), allocatable :: nremove_per_cell
+  type (cloud) :: clinject
+  double precision ymax, ymin
+  double precision xip, yip, xmin, xmax, distmin, dist, x, y
+  logical, dimension(:), allocatable :: remove
+  logical, dimension(:), allocatable :: not_remove
+  logical, dimension(:), allocatable :: cell_injected
+  integer ichoice, k, k2, ii, k1, ndist, npcl_new, nntot
+
+  double precision distmin_per_quadrant(4), dx, dy, refdist
+  integer ipart(4)
+  integer npart, jcell_k, icell_k, ic_k, jl, il, nperline
+  integer counter_interpolated, counter_averaged, counter_closest
+  double precision N1, N2, N3, N4, r, s, dlx, dly
+
+  ierr    = 0
+
+  if (any(grid%nn<grid%nmin) .or. any(grid%nn>2*grid%nmax)) then
+
+  ncelly  = ny-1
+  ncellx  = nx-1
+  ncell   = ncellx*ncelly
+
+  dx      = xl/(nx-1)
+  dy      = yl/(ny-1)
+  refdist = sqrt(dx**2+dy**2)
+
+  ninject = 0
+  nremove = 0
+
+  allocate(ninject_per_cell(ncell))
+  allocate(nremove_per_cell(ncell))
+  ninject_per_cell = 0
+  nremove_per_cell = 0
+  npcl_max         = grid%nmax
+  npcl_min         = grid%nmin
+
+  ! diagnosis
+  !$omp parallel do shared(ncell,grid,ninject_per_cell,nremove_per_cell,npcl_max,npcl_min) private(ic,nnic) reduction(+:ninject,nremove)
+  do ic=1,ncell
+     nnic     = grid%nn(ic)
+  
+     if (nnic < npcl_min) then
+       ninject_per_cell(ic) = floor(dble(npcl_min-nnic)/9.d0) * 9 + 9
+     endif
+     if (nnic > npcl_max) then
+       nremove_per_cell(ic) = nnic-npcl_max
+     endif
+!     write(*,'(5I10)') ic, ninject_per_cell(ic), nremove_per_cell(ic), npcl_min, npcl_max
+
+     ninject = ninject + ninject_per_cell(ic)
+     nremove = nremove + nremove_per_cell(ic)
+
+  end do
+  !$omp end parallel do
+  !end do
+
+  write(*,'(a,i6,a,i6)') 'injecting ',ninject,' cloud points, maxpercell',maxval(ninject_per_cell)
+  write(*,'(a,i6,a,i6)') 'removing  ',nremove,' cloud points, maxpercell',maxval(nremove_per_cell)
+
+  npcl_new = cl%npcl + ninject-nremove
+
+  write(*,'(a,2i9)') 'npcl new/old =',npcl_new,cl%npcl
+
+
+  !injection ---------------------------------------------------------------------------
+  if (ninject>0) then
+    allocate(cell_injected(ncell))
+    cell_injected = .false.
+
+    allocate(clinject%x(ninject))
+    allocate(clinject%y(ninject))
+    allocate(clinject%h(ninject))
+    allocate(clinject%b(ninject))
+    allocate(clinject%etot(ninject))
+    allocate(clinject%erate(ninject))
+    allocate(clinject%cell(ninject))
+    allocate(clinject%active(ninject))
+    allocate(clinject%icy(ninject))
+    allocate(clinject%icx(ninject))
+    counter_inject       = 0
+    counter_interpolated = 0
+    counter_averaged     = 0
+    counter_closest      = 0
+    dly                  = dy/(3+2-1)
+
+    !!! omp parallel do shared(ncell,ncellx,ncelly,grid,cl,ninject_per_cell,nremove_per_cell,dly,dx,clinject,refdist) private(ic,nnic,ii,il,jl,dlx,nperline,distmin_per_quadrant,ipart,k,dist,distmin,npart,icell,jcell,icell_k,jcell_k,ic_k,ip,xip,yip,xmin,xmax,r,ymin,ymax,s,N1,N2,N3,N4) reduction(+:counter_inject,counter_interpolated,counter_averaged)
+    do ic=1,ncell
+       jcell    = ceiling(real(ic)/real(ncellx))
+       icell    = ic - (jcell-1)*ncellx
+       nnic     = grid%nn(ic)
+       nperline = ninject_per_cell(ic)/3
+       dlx      = dx/(nperline+2-1)
+       if (ninject_per_cell(ic) > 0) then
+          cell_injected(ic) = .true.
+          do ii=1,ninject_per_cell(ic)
+             counter_inject             = counter_inject+1
+             jl                         = ceiling(real(ii)/real(nperline))
+             il                         = ii - (jl-1)*nperline
+             clinject%x(counter_inject) = grid%x(grid%icon(1,ic)) + il*dlx
+             clinject%y(counter_inject) = grid%y(grid%icon(1,ic)) + jl*dly
+ 
+             !find closest cloud point to new point
+             if (nnic>0) then
+                distmin_per_quadrant = 1.d30
+                ipart = -1
+                do k=1,nnic
+                   dist=(clinject%x(counter_inject)-cl%x(grid%pair(k,ic)))**2 + &
+                        (clinject%y(counter_inject)-cl%y(grid%pair(k,ic)))**2 
+                   if ( cl%x(grid%pair(k,ic)) < clinject%x(counter_inject) .and. &
+                        cl%y(grid%pair(k,ic)) < clinject%y(counter_inject) .and. &
+                        dist < distmin_per_quadrant(1) ) then
+                      distmin_per_quadrant(1) = dist
+                      ipart(1)                = grid%pair(k,ic)
+                      cycle
+                   endif
+                   if ( cl%x(grid%pair(k,ic)) > clinject%x(counter_inject) .and. &
+                        cl%y(grid%pair(k,ic)) < clinject%y(counter_inject) .and. &
+                        dist < distmin_per_quadrant(2) ) then
+                      distmin_per_quadrant(2) = dist
+                      ipart(2)                = grid%pair(k,ic)
+                      cycle
+                   endif
+                   if ( cl%x(grid%pair(k,ic)) > clinject%x(counter_inject) .and. &
+                        cl%y(grid%pair(k,ic)) > clinject%y(counter_inject) .and. &
+                        dist < distmin_per_quadrant(3) ) then
+                      distmin_per_quadrant(3) = dist
+                      ipart(3)                = grid%pair(k,ic)
+                      cycle
+                   endif
+                   if ( cl%x(grid%pair(k,ic)) < clinject%x(counter_inject) .and. &
+                        cl%y(grid%pair(k,ic)) > clinject%y(counter_inject) .and. &
+                        dist < distmin_per_quadrant(4) ) then
+                      distmin_per_quadrant(4) = dist
+                      ipart(4)                = grid%pair(k,ic)
+                      cycle
+                   endif
+                end do
+                npart = 0
+                do k=1,4
+                   if (ipart(k)>0) npart = npart + 1
+                enddo
+             else
+                ipart   = -1
+                npart   = 0
+                write(*,*) "WARNING: nnic = 0 (update_cloud)"
+                !stop 'nnic = 0 | not possible'
+             endif !nnic>0
+ 
+             if (npart<4) then
+               ! if no particle in a quadrant we find the closest particle in the
+               ! adjacent cell
+               do k=1,4
+                 if (ipart(k)<0) then
+                   if (k==1) then
+                     icell_k = icell - 1
+                     jcell_k = jcell - 1
+                     if ((icell_k<1).or.(jcell_k<1)) cycle
+                   else if (k==2) then
+                     icell_k = icell + 1
+                     jcell_k = jcell - 1
+                     if ((icell_k>ncellx).or.(jcell_k<1)) cycle
+                   else if (k==3) then
+                     icell_k = icell + 1
+                     jcell_k = jcell + 1
+                     if ((icell_k>ncellx).or.(jcell_k>ncelly)) cycle
+                   else if (k==4) then
+                     icell_k = icell - 1
+                     jcell_k = jcell + 1
+                     if ((icell_k<1).or.(jcell_k>ncelly)) cycle
+                   endif
+                   ic_k      = (jcell_k-1)*ncellx+icell_k
+                   distmin   = 1.d30
+                   if (cell_injected(ic_k)) then
+                     nntot = grid%nn(ic_k) - ninject_per_cell(ic)
+                   else
+                     nntot = grid%nn(ic_k)
+                   endif
+                   do ip=1,nntot
+                     !we cannot use new injected
+                     !if (grid%pair(ip,ic_k)>0.and.grid%pair(ip,ic_k)<=cl%npcl) then
+                       dist=(clinject%x(counter_inject)-cl%x(grid%pair(ip,ic_k)))**2 + &
+                            (clinject%y(counter_inject)-cl%y(grid%pair(ip,ic_k)))**2
+                       if (dist<distmin) then
+                          distmin   = dist
+                          ipart(k)  = grid%pair(ip,ic_k)
+                       end if
+                     !endif
+                   enddo
+                   npart = npart + 1
+                 endif
+               enddo
+             endif
+ 
+             if (npart==4) then
+                counter_interpolated = counter_interpolated + 1
+                xip=clinject%x(counter_inject)
+                yip=clinject%y(counter_inject)
+ 
+                xmin=(cl%x(ipart(4))-cl%x(ipart(1)))/(cl%y(ipart(4))-cl%y(ipart(1)))*(yip-cl%y(ipart(1))) + cl%x(ipart(1))
+                xmax=(cl%x(ipart(3))-cl%x(ipart(2)))/(cl%y(ipart(3))-cl%y(ipart(2)))*(yip-cl%y(ipart(2))) + cl%x(ipart(2))
+                r=((xip-xmin)/(xmax-xmin) -0.5d0 ) *2.d0
+ 
+                ymin=(cl%y(ipart(2))-cl%y(ipart(1)))/(cl%x(ipart(2))-cl%x(ipart(1)))*(xip-cl%x(ipart(1))) + cl%y(ipart(1))
+                ymax=(cl%y(ipart(3))-cl%y(ipart(4)))/(cl%x(ipart(3))-cl%x(ipart(4)))*(xip-cl%x(ipart(4))) + cl%y(ipart(4))
+                s=((yip-ymin)/(ymax-ymin) -0.5d0 ) *2.d0
+                N1=0.25d0*(1.d0-r)*(1.d0-s) 
+                N2=0.25d0*(1.d0+r)*(1.d0-s) 
+                N3=0.25d0*(1.d0+r)*(1.d0+s) 
+                N4=0.25d0*(1.d0-r)*(1.d0+s) 
+                clinject%h(counter_inject)     = N1 * cl%h(ipart(1))     + N2 * cl%h(ipart(2))     + N3 * cl%h(ipart(3))     + N4 * cl%h(ipart(4))
+                clinject%b(counter_inject)     = N1 * cl%b(ipart(1))     + N2 * cl%b(ipart(2))     + N3 * cl%b(ipart(3))     + N4 * cl%b(ipart(4))
+                clinject%etot(counter_inject)  = N1 * cl%etot(ipart(1))  + N2 * cl%etot(ipart(2))  + N3 * cl%etot(ipart(3))  + N4 * cl%etot(ipart(4))
+                clinject%erate(counter_inject) = N1 * cl%erate(ipart(1)) + N2 * cl%erate(ipart(2)) + N3 * cl%erate(ipart(3)) + N4 * cl%erate(ipart(4))
+             else
+                counter_averaged = counter_averaged + 1
+                clinject%h(counter_inject)     = 0.d0
+                clinject%b(counter_inject)     = 0.d0
+                clinject%etot(counter_inject)  = 0.d0
+                clinject%erate(counter_inject) = 0.d0
+                N1 = 0.d0
+                do k=1,4
+                   if (ipart(k)>0) then
+                     clinject%h(counter_inject) = clinject%h(counter_inject) + cl%h(ipart(k))*refdist/distmin_per_quadrant(k)
+                     clinject%b(counter_inject) = clinject%b(counter_inject) + cl%b(ipart(k))*refdist/distmin_per_quadrant(k)
+                     clinject%etot(counter_inject) = clinject%etot(counter_inject) + cl%etot(ipart(k))*refdist/distmin_per_quadrant(k)
+                     clinject%erate(counter_inject) = clinject%erate(counter_inject) + cl%erate(ipart(k))*refdist/distmin_per_quadrant(k)
+                     N1 = N1 + (refdist/distmin_per_quadrant(k))
+                   endif
+                enddo
+                clinject%h(counter_inject)     = clinject%h(counter_inject)/N1
+                clinject%b(counter_inject)     = clinject%b(counter_inject)/N1
+                clinject%etot(counter_inject)  = clinject%etot(counter_inject)/N1
+                clinject%erate(counter_inject) = clinject%erate(counter_inject)/N1               
+ 
+             endif
+ 
+             clinject%b(counter_inject)      = min(clinject%b(counter_inject),clinject%h(counter_inject))
+             clinject%cell(counter_inject)   = ic
+             clinject%active(counter_inject) = .true.
+             clinject%icy(counter_inject)    = jcell
+             clinject%icx(counter_inject)    = icell
+
+          enddo !ii
+          grid%nn(ic) = grid%nn(ic) + ninject_per_cell(ic)
+       endif    !ninject_cell>0
+    enddo       !ic
+    !!! omp end parallel do
+
+    if (counter_inject /= ninject) stop 'pb inject in update_cloud_structure'
+    write(*,'(a,F7.3,a,F7.3,a,F7.3,a)') 'Method for interpolation during injection: shape function = ', (float(counter_interpolated)/float(ninject))*100.d0, &
+                                        ' %, average = ', (float(counter_averaged)/float(ninject))*100.d0, &
+                                        ' %, closest = ', (float(counter_closest)/float(ninject))*100.d0,' %'
+
+    deallocate(cell_injected)
+  endif !if (ninject>0)
+    
+  !removal ---------------------------------------------------------------------------
+  allocate(remove(cl%npcl))
+  remove=.false.
+
+  if (nremove>0) then
+
+    !$omp parallel do shared(ncell,grid,cl,nremove_per_cell,remove) private(ic,nnic,distmin,ii,k1,dist,ndist,x,y,k2,k,ichoice)
+    do ic=1,ncell
+       
+       if (nremove_per_cell(ic) > 0) then
+          nnic     = grid%nn(ic)
+          do ii=1,nremove_per_cell(ic)
+             distmin=1.d30
+             !loop through points in cell
+             do k1=1,nnic
+                if (.not.remove(grid%pair(k1,ic))) then
+                   dist=0.d0
+                   ndist=0
+                   x=cl%x(grid%pair(k1,ic))
+                   y=cl%y(grid%pair(k1,ic))
+                   !calculate summed distance to all other points in cell that
+                   !haven't been chosen to be removed yet
+                   do k2=1,nnic
+                      if (.not.remove(grid%pair(k2,ic)) .and. k1/=k2) then
+                         dist=dist+(x-cl%x(grid%pair(k2,ic)))**2 + (y-cl%y(grid%pair(k2,ic)))**2  
+                         ndist=ndist+1
+                      end if
+                   end do 
+                   !add distances to cell corner nodes
+                   do k=1,4
+                      dist=dist+(x-grid%x(grid%icon(k,ic)))**2+(y-grid%y(grid%icon(k,ic)))**2
+                      ndist=ndist+1
+                   end do
+                   !find smallest average distance to other points and corner nodes
+                   dist=dist/ndist
+                   if (dist<distmin) then
+                      distmin=dist
+                      ichoice=grid%pair(k1,ic)
+                   end if
+                end if
+             end do
+             !remove point with smallest distance
+             remove(ichoice)=.true.
+          end do ! do ii=1,nremove_per_cell(ic)
+          grid%nn(ic) = grid%nn(ic) - nremove_per_cell(ic)
+       end if    !if (nremove_per_cell(ic) > 0)
+
+    end do
+    !$omp end parallel do
+    !end loop elements
+   
+    if(count(remove)/=nremove) stop 'pb inject in update_cloud_structure'
+
+  endif !endif nremove>0
+
+  allocate(not_remove(cl%npcl))
+  not_remove = .not. remove
+
+  deallocate(ninject_per_cell)
+  deallocate(nremove_per_cell)
+
+
+  !update arrays ---------------------------------------------------------------------------
+  if (nremove>0) then
+    call array_trim(cl%x                     ,not_remove)
+    call array_trim(cl%y                     ,not_remove)
+    call array_trim(cl%h                     ,not_remove)
+    call array_trim(cl%b                     ,not_remove)
+    call array_trim(cl%etot                  ,not_remove)
+    call array_trim(cl%erate                 ,not_remove)
+    call array_trim(cl%icy                   ,not_remove)
+    call array_trim(cl%cell                  ,not_remove)
+    call array_trim(cl%active                ,not_remove)
+    call array_trim(cl%icx                   ,not_remove)
+  endif !endif nremove>0
+  if (ninject>0) then
+    call array_append(cl%x                   ,clinject%x)
+    call array_append(cl%y                   ,clinject%y)
+    call array_append(cl%h                   ,clinject%h)
+    call array_append(cl%b                   ,clinject%b)
+    call array_append(cl%etot                ,clinject%etot)
+    call array_append(cl%erate               ,clinject%erate)
+    call array_append(cl%icy                 ,clinject%icy)
+    call array_append(cl%cell                ,clinject%cell)
+    call array_append(cl%active              ,clinject%active)
+    call array_append(cl%icx                 ,clinject%icx)
+  endif !endif ninject>0
+  !free memory
+  if (ninject>0) then
+      deallocate(clinject%x)
+      deallocate(clinject%y)
+      deallocate(clinject%h)
+      deallocate(clinject%b)
+      deallocate(clinject%etot)
+      deallocate(clinject%erate)
+      deallocate(clinject%cell)
+      deallocate(clinject%active)
+      deallocate(clinject%icy)
+      deallocate(clinject%icx)
+  endif !endif ninject>0
+  deallocate(not_remove)
+  deallocate(remove)
+
+  if (ninject>0 .or. nremove>0) then
+
+  cl%npcl=npcl_new
+
+  if (sum(grid%nn)/=cl%npcl) stop 'pb grid%nn in update_cloud (1)'
+ 
+  if (allocated(grid%pair)) deallocate(grid%pair)
+  allocate(grid%pair(maxval(grid%nn),ncell))
+
+  grid%nn = 0
+  do ip=1,cl%npcl
+    ic                            = cl%cell(ip)
+    grid%nn(ic)                   = grid%nn(ic) + 1
+    grid%pair(grid%nn(ic),ic)     = ip
+  enddo
+
+  if (sum(grid%nn)/=cl%npcl) stop 'pb grid%nn in update_cloud (2)'
+
+  write(*,'(a,2i15)')    'located grid%nn min/max',minval(grid%nn),maxval(grid%nn)
+
+  endif !if (ninject>0 .or. nremove>0) then
+
+  endif !any nnic <grid%nmin or nnic>2*grid%nmax
+
+  return
+
+end subroutine update_cloud
+
+!--------------------------------------------------------------------------
+
+subroutine update_cloud_v1 (ierr)
 
   use FastScapeContext
 
@@ -848,9 +1319,9 @@ subroutine update_cloud (ierr)
     call array_append(cl%etot                ,clinject%etot)
     call array_append(cl%erate               ,clinject%erate)
     call array_append(cl%icy                 ,clinject%icy)
+    call array_append(cl%cell                ,clinject%cell)
     call array_append(cl%active              ,clinject%active)
     call array_append(cl%icx                 ,clinject%icx)
-    call array_append(cl%cell                ,clinject%cell)
   endif !endif ninject>0
   !free memory
   if (ninject>0) then
@@ -872,7 +1343,7 @@ subroutine update_cloud (ierr)
 
   return
 
-end subroutine update_cloud
+end subroutine update_cloud_v1
 
 !--------------------------------------------------------------------------
 

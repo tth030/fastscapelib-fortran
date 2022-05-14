@@ -15,7 +15,8 @@ module FastScapeContext
     integer, dimension(:), allocatable           :: icx,icy
     integer, dimension(:), allocatable           :: cell
     logical, dimension(:), allocatable           :: active
-    integer                                      :: npcl
+    integer                                      :: npcl, nleaving
+    integer, dimension(:), allocatable           :: ip_leaving
   end type cloud 
 
   type FEgrid
@@ -42,10 +43,8 @@ module FastScapeContext
   double precision, dimension(:,:), pointer, contiguous :: h2, vx2, vy2, u2, etot2, b2
 
   !TT leapfrog advection scheme ----
-  double precision, target, dimension(:), allocatable :: hprev_x, etotprev_x, bprev_x
-  double precision, dimension(:,:), pointer, contiguous :: h2prev_x, etot2prev_x, b2prev_x 
-  double precision, target, dimension(:), allocatable :: hprev_y, etotprev_y, bprev_y
-  double precision, dimension(:,:), pointer, contiguous :: h2prev_y, etot2prev_y, b2prev_y 
+  double precision, target, dimension(:), allocatable :: hprev, etotprev, bprev
+  double precision, dimension(:,:), pointer, contiguous :: hprev2, etotprev2, bprev2 
   !----------------------------------
 
   double precision :: xl, yl, dt, kfsed, m, n, kdsed, g1, g2, p
@@ -55,7 +54,7 @@ module FastScapeContext
   integer, dimension(:,:), allocatable :: don
   integer, dimension(:), allocatable :: rock_type ! 1 is basement, 2 is cont. sed, 3 is marine sed.
   logical :: runSPL, runAdvect, runAdvect3d, runDiffusion, runStrati, runUplift, runMarine, runLagToEul
-  real :: timeSPL, timeDiffusion, timeStrati, timeUplift, timeMarine
+  double precision :: timeSPL, timeDiffusion, timeStrati, timeUplift, timeMarine
   double precision :: timeAdvect3d, timeAdvect, timeEulToLag
   double precision, dimension(:,:), allocatable :: reflector
   double precision, dimension(:,:,:), allocatable :: fields
@@ -141,8 +140,7 @@ module FastScapeContext
 
     call Destroy()
     allocate (h(nn),u(nn),vx(nn),vy(nn),stack(nn),ndon(nn),rec(nn),don(8,nn),catch0(nn),catch(nn),precip(nn))
-    allocate (hprev_x(nn),bprev_x(nn),etotprev_x(nn))
-    allocate (hprev_y(nn),bprev_y(nn),etotprev_y(nn))
+    allocate (hprev(nn),bprev(nn),etotprev(nn))
     allocate (g(nn))
     allocate (bounds_bc(nn))
     allocate (p_mfd_exp(nn))
@@ -158,13 +156,9 @@ module FastScapeContext
     u2(1:nx,1:ny) => u
     etot2(1:nx,1:ny) => etot
 
-    h2prev_x(1:nx,1:ny) => hprev_x
-    b2prev_x(1:nx,1:ny) => bprev_x
-    etot2prev_x(1:nx,1:ny) => etotprev_x
-
-    h2prev_y(1:nx,1:ny) => hprev_y
-    b2prev_y(1:nx,1:ny) => bprev_y
-    etot2prev_y(1:nx,1:ny) => etotprev_y
+    hprev2(1:nx,1:ny) => hprev
+    bprev2(1:nx,1:ny) => bprev
+    etotprev2(1:nx,1:ny) => etotprev
 
     call SetBC (1111)
     call random_number (h)

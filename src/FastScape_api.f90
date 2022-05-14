@@ -248,7 +248,7 @@ subroutine FastScape_Execute_Step(ierr)
   implicit none
 
   integer, intent(out):: ierr
-  real :: time_in, time_out
+  !real :: time_in, time_out
   double precision :: dtime_in, dtime_out
   double precision, dimension(:), allocatable :: h_before_sp, b_before_sp, etot_before_sp, erate_before_sp
 
@@ -277,18 +277,20 @@ subroutine FastScape_Execute_Step(ierr)
       !call cpu_time (time_out)
       dtime_in = omp_get_wtime()
       !call Advect_p (ierr)
-      !call Advect (ierr)
-      call Advect_laxwendroff (ierr)
+      call Advect (ierr)
+      !call Advect_laxwendroff (ierr)
       !call Advect_leapfrog (ierr)
       dtime_out = omp_get_wtime()
       timeAdvect = timeAdvect + dtime_out-dtime_in
     endif
   
     if (runUplift) then
-      call cpu_time (time_in)
+      !call cpu_time (time_in)
+      dtime_in = omp_get_wtime()
       call Uplift()
-      call cpu_time (time_out)
-      timeUplift = timeUplift + time_out-time_in
+      dtime_out = omp_get_wtime()
+      !call cpu_time (time_out)
+      timeUplift = timeUplift + dtime_out-dtime_in
     endif
   endif
   
@@ -301,7 +303,8 @@ subroutine FastScape_Execute_Step(ierr)
   endif
 
   if (runSPL) then
-    call cpu_time (time_in)
+    !call cpu_time (time_in)
+    dtime_in = omp_get_wtime()
     if (SingleFlowDirection) then
       call FlowRoutingSingleFlowDirection (ierr);FSCAPE_CHKERR(ierr)
       call FlowAccumulationSingleFlowDirection ()
@@ -311,33 +314,40 @@ subroutine FastScape_Execute_Step(ierr)
       call FlowAccumulation ()
       call StreamPowerLaw ()
     endif
-    call cpu_time (time_out)
-    timeSPL = timeSPL + time_out-time_in
+    dtime_out = omp_get_wtime()
+    !call cpu_time (time_out)
+    timeSPL = timeSPL + dtime_out-dtime_in
   endif
 
   if (runDiffusion) then
-    call cpu_time (time_in)
+    !call cpu_time (time_in)
+    dtime_in = omp_get_wtime()
     call Diffusion (ierr);FSCAPE_CHKERR(ierr)
-    call cpu_time (time_out)
-    timeDiffusion = timeDiffusion + time_out-time_in
+    dtime_out = omp_get_wtime()
+    !call cpu_time (time_out)
+    timeDiffusion = timeDiffusion + dtime_out-dtime_in
   endif
 
   if (runMarine) then
-     call cpu_time (time_in)
+     !call cpu_time (time_in)
+     dtime_in = omp_get_wtime()
      if (.not. use_marine_aggradation) then
        call Marine (ierr);FSCAPE_CHKERR(ierr)
      else
        call MarineAggradation(ierr);FSCAPE_CHKERR(ierr)
      end if
-     call cpu_time (time_out)
-     timeMarine = timeMarine + time_out-time_in
+     dtime_out = omp_get_wtime()
+     !call cpu_time (time_out)
+     timeMarine = timeMarine + dtime_out-dtime_in
   endif
 
   if (runStrati) then
-     call cpu_time (time_in)
+     !call cpu_time (time_in)
+     dtime_in = omp_get_wtime()
      call Run_Strati ()
-     call cpu_time (time_out)
-     timeStrati = timeStrati + time_out-time_in
+     dtime_out = omp_get_wtime()
+     !call cpu_time (time_out)
+     timeStrati = timeStrati + dtime_out-dtime_in
   endif
 
   if (runAdvect3d .and. runLagToEul)  then

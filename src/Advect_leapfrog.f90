@@ -9,10 +9,14 @@ subroutine Advect_leapfrog (ierr)
 
   implicit none
 
-  double precision dx,dy,alpha,cA,cB
-  double precision,dimension(:),allocatable :: hres, bres, etotres
-  double precision,dimension(:),allocatable :: hprev_x_saved, bprev_x_saved, etotprev_x_saved
-  double precision,dimension(:),allocatable :: hprev_y_saved, bprev_y_saved, etotprev_y_saved
+  double precision dx,dy,Cx,Cy,alpha,PI
+!  double precision,dimension(:),allocatable :: hres, bres, etotres
+!  double precision,dimension(:),allocatable :: hprev_x_saved, bprev_x_saved, etotprev_x_saved
+!  double precision,dimension(:),allocatable :: hprev_y_saved, bprev_y_saved, etotprev_y_saved
+  
+  double precision, target, dimension(:), allocatable   :: hres, bres, etotres
+  double precision, dimension(:,:), pointer, contiguous :: hres2, bres2, etotres2
+  double precision, dimension(:), allocatable           :: hprev_saved, bprev_saved,etotprev_saved
   integer i,j
   integer,intent(out) :: ierr
 
@@ -24,101 +28,175 @@ subroutine Advect_leapfrog (ierr)
 
   if (step<=2) then
 
-    hprev_x = h
-    bprev_x = b 
-    etotprev_x = etot
-
-    hprev_y = h
-    bprev_y = b
-    etotprev_y = etot
+    hprev = h
+    bprev = b 
+    etotprev = etot
 
     call Advect_laxwendroff(ierr);FSCAPE_CHKERR(ierr)
 
   else
 
-    ! y-advection using an explicit, second-order scheme to solve advection eq.
-    allocate(hprev_y_saved(nn), bprev_y_saved(nn), etotprev_y_saved(nn))
-    hprev_y_saved=h
-    bprev_y_saved=b
-    etotprev_y_saved=etot
+    allocate(hres(nn),bres(nn),etotres(nn))
+    allocate(hprev_saved(nn),bprev_saved(nn),etotprev_saved(nn))
+    hres2(1:nx,1:ny) => hres
+    bres2(1:nx,1:ny) => bres
+    etotres2(1:nx,1:ny) => etotres
+    hprev_saved = h
+    bprev_saved = b
+    etotprev_saved  = etot
 
-    allocate(hres(ny), bres(ny), etotres(ny))
-    do i=1,nx
+    PI = 4.d0*datan(1.d0)
+
+    do i=2,nx-1
       do j=2,ny-1
-        alpha   = vy2(i,j)*dt/dy
-  
-        cA       = h2(i,j+1) - h2(i,j-1) 
-        cB       = h2prev_y(i,j)
-        hres(j)  = cB - alpha*cA
-  
-        cA       = b2(i,j+1) - b2(i,j-1) 
-        cB       = b2prev_y(i,j)
-        bres(j)  = cB - alpha*cA
-  
-        cA         = etot2(i,j+1) - etot2(i,j-1) 
-        cB         = etot2prev_y(i,j)
-        etotres(j) = cB - alpha*cA
+        !direction
+        if (vx2(i,j)==0.d0) then
+          alpha = PI/2.d0
+          if (vy2(i,j)<0.d0) then
+          alpha = alpha*-1.d0
+          endif
+        else
+          alpha = atan(vy2(i,j)/vx2(i,j))
+        endif
+        !if (vx2(i,j)>0 .and. vy2(i,j)>=0) then
+        !  pass
+        if (vx2(i,j)<0 .and. vy2(i,j)>=0) then
+          alpha = alpha + PI
+        else if (vx2(i,j)<0 .and. vy2(i,j)<0) then
+          alpha = alpha + PI
+        else if (vx2(i,j)>0 .and. vy2(i,j)<0) then
+          if (alpha<-1.d0*PI/4.d0) alpha = 2*PI + alpha
+        endif
+
+        !Courant numbers
+        Cx = vx2(i,j)*dt/dx
+        Cy = vy2(i,j)*dt/dy
+
+        !Advection
+        call compute_advection_point(hres2(i,j),h2,hprev2,nx,ny,i,j,alpha,Cx,Cy)
+        call compute_advection_point(bres2(i,j),b2,bprev2,nx,ny,i,j,alpha,Cx,Cy)
+        call compute_advection_point(etotres2(i,j),etot2,etotprev2,nx,ny,i,j,alpha,Cx,Cy)    
+    
       enddo
-      hres(1)     = hres(2)
-      hres(ny)    = hres(ny-1)
-      bres(1)     = bres(2)
-      bres(ny)    = bres(ny-1)
-      etotres(1)  = etotres(2)
-      etotres(ny) = etotres(ny-1)
-      h2(i,1:ny)    = hres
-      b2(i,1:ny)    = bres
-      etot2(i,1:ny) = etotres
     enddo
-    deallocate(hres, bres, etotres)
 
- 
-    ! x-advection using an explicit, second-order scheme to solve advection eq.
-    allocate(hprev_x_saved(nn), bprev_x_saved(nn), etotprev_x_saved(nn))
-    hprev_x_saved=h
-    bprev_x_saved=b
-    etotprev_x_saved=etot
+    !Advection on boundaries
+    call advect_boundaries(hres2,h2,hprev2,vx2,vy2,nx,ny,dt,dx,dy)
+    call advect_boundaries(bres2,b2,bprev2,vx2,vy2,nx,ny,dt,dx,dy)
+    call advect_boundaries(etotres2,etot2,etotprev2,vx2,vy2,nx,ny,dt,dx,dy)
 
-    allocate(hres(nx), bres(nx), etotres(nx))
-    do j=1,ny
-      do i=2,nx-1
-        alpha   = vx2(i,j)*dt/dx
-  
-        cA       = h2(i+1,j) - h2(i-1,j) 
-        cB       = h2prev_x(i,j)
-        hres(i)  = cB - alpha*cA
+    !Transfer values and deallocation
+    h        = hres
+    b        = bres
+    b        = min(b,h)
+    etot     = etotres
+    hprev    = hprev_saved
+    bprev    = bprev_saved
+    etotprev = etotprev_saved
+    deallocate(hres,bres,etotres,hprev_saved,bprev_saved,etotprev_saved)
 
-        cA       = b2(i+1,j) - b2(i-1,j) 
-        cB       = b2prev_x(i,j)
-        bres(i)  = cB - alpha*cA
-  
-        cA         = etot2(i+1,j) - etot2(i-1,j) 
-        cB         = etot2prev_x(i,j)
-        etotres(i) = cB - alpha*cA
-      enddo
-      hres(1)     = hres(2)
-      hres(nx)    = hres(nx-1)
-      bres(1)     = bres(2)
-      bres(nx)    = bres(nx-1)
-      etotres(1)  = etotres(2)
-      etotres(nx) = etotres(nx-1)
-      h2(1:nx,j)    = hres
-      b2(1:nx,j)    = bres
-      etot2(1:nx,j) = etotres
-    enddo
-    deallocate(hres, bres, etotres)
- 
-    b=min(b,h)
-
-    hprev_x=hprev_x_saved
-    bprev_x=bprev_x_saved
-    etotprev_x=etotprev_x_saved
-
-    hprev_y=hprev_y_saved
-    bprev_y=bprev_y_saved
-    etotprev_y=etotprev_y_saved
-    deallocate(hprev_x_saved, bprev_x_saved, etotprev_x_saved)
-    deallocate(hprev_y_saved, bprev_y_saved, etotprev_y_saved)
   endif
 
   return
-  end subroutine Advect_leapfrog
+
+end subroutine Advect_leapfrog
+
+!--------------------------------------------------------------------------
+
+subroutine compute_advection_point (advected_value, array,array_prev,nx,ny,i,j,alpha, Cx, Cy)
+
+  implicit none
+
+  double precision, intent(out) :: advected_value
+  double precision, dimension(nx,ny), intent(in) :: array, array_prev
+  double precision, intent(in) :: alpha, Cx, Cy
+  integer, intent(in) :: nx, ny, i, j
+  double precision PI, cA, cB
+
+  PI = 4.d0*datan(1.d0)
+  
+  if      (alpha>=-1.d0*PI/4.d0 .and. alpha<=     PI/4.d0) then
+    cA         = array(i,j) - array(i-1,j) 
+    cB         = array(i,j+1) - array(i,j-1) + array(i-1,j+1) - array(i-1,j-1)
+    advected_value = array_prev(i-1,j) + array(i,j) - array(i-1,j)  - 2.d0*Cx*cA - (Cy/2.d0)*cB
+  else if (alpha>=      PI/4.d0 .and. alpha<=3.d0*PI/4.d0) then
+    cA         = array(i+1,j) - array(i-1,j) + array(i+1,j-1) - array(i-1,j-1)
+    cB         = array(i,j) - array(i,j-1)
+    advected_value = array_prev(i,j-1) + array(i,j) - array(i,j-1) - (Cx/2.d0)*cA - 2.d0*Cy*cB
+  else if (alpha>= 3.d0*PI/4.d0 .and. alpha<=5.d0*PI/4.d0) then
+    cA         = array(i+1,j) - array(i,j)
+    cB         = array(i,j+1) - array(i,j-1) + array(i+1,j+1) - array(i+1,j-1)
+    advected_value = array_prev(i+1,j) + array(i,j) - array(i+1,j) - 2.d0*Cx*cA - (Cy/2.d0)*cB
+  else if (alpha>= 5.d0*PI/4.d0 .and. alpha<=7.d0*PI/4.d0) then
+    cA         = array(i+1,j) - array(i-1,j) + array(i+1,j+1) - array(i-1,j+1)
+    cB         = array(i,j+1) - array(i,j)
+    advected_value = array_prev(i,j+1) + array(i,j) - array(i,j+1) - (Cx/2.d0)*cA - 2.d0*Cy*cB
+  endif
+
+end subroutine compute_advection_point
+
+!--------------------------------------------------------------------------
+
+subroutine advect_boundaries(final_array,array,array_prev,vx2,vy2,nx,ny,dt,dx,dy)
+
+  implicit none
+  
+  integer, intent(in) :: nx, ny
+  double precision, dimension(nx,ny), intent(inout) :: final_array
+  double precision, dimension(nx,ny), intent(in) :: array, array_prev, vx2, vy2
+  double precision, intent(in) :: dt,dx,dy
+
+  double precision Cx, Cy, cA, cB
+  integer i, j 
+ 
+  !Right and top sides
+  i = nx
+  do j=2,ny
+    Cx         = vx2(i,j)*dt/dx
+    Cy         = vy2(i,j)*dt/dy
+    cA         = array(i,j) - array(i-1,j) + array(i,j-1) - array(i-1,j-1)
+    cB         = array(i,j) - array(i,j-1) + array(i-1,j) - array(i-1,j-1)
+    final_array(i,j) = array_prev(i-1,j-1) + array(i,j) - array(i-1,j-1) - Cx*cA - Cy*cB
+  enddo
+  j = ny
+  do i=2,nx
+    Cx         = vx2(i,j)*dt/dx
+    Cy         = vy2(i,j)*dt/dy
+    cA         = array(i,j) - array(i-1,j) + array(i,j-1) - array(i-1,j-1)
+    cB         = array(i,j) - array(i,j-1) + array(i-1,j) - array(i-1,j-1)
+    final_array(i,j) = array_prev(i-1,j-1) + array(i,j) - array(i-1,j-1) - Cx*cA - Cy*cB
+  enddo
+  !Left and botttom sides
+  i = 1
+  do j=1,ny-1
+    Cx         = vx2(i,j)*dt/dx
+    Cy         = vy2(i,j)*dt/dy
+    cA         = array(i,j) - array(i+1,j) + array(i,j+1) - array(i+1,j+1)
+    cB         = array(i,j) - array(i,j+1) + array(i+1,j) - array(i+1,j+1)
+    final_array(i,j) = array_prev(i+1,j+1) + array(i,j) - array(i+1,j+1) - Cx*cA - Cy*cB
+  enddo
+  j = 1
+  do i=1,nx-1
+    Cx         = vx2(i,j)*dt/dx
+    Cy         = vy2(i,j)*dt/dy
+    cA         = array(i,j) - array(i+1,j) + array(i,j+1) - array(i+1,j+1)
+    cB         = array(i,j) - array(i,j+1) + array(i+1,j) - array(i+1,j+1)
+    final_array(i,j) = array_prev(i+1,j+1) + array(i,j) - array(i+1,j+1) - Cx*cA - Cy*cB
+  enddo
+  !Bottom right
+  j = 1 ; i = nx
+  Cx         = vx2(i,j)*dt/dx
+  Cy         = vy2(i,j)*dt/dy
+  cA         = array(i,j) - array(i-1,j) + array(i,j+1) - array(i-1,j+1)
+  cB         = array(i,j) - array(i,j+1) + array(i-1,j) - array(i-1,j+1)
+  final_array(i,j) = array_prev(i-1,j+1) + array(i,j) - array(i-1,j+1) - Cx*cA - Cy*cB
+  !Top left
+  j = ny ; i = 1
+  Cx         = vx2(i,j)*dt/dx
+  Cy         = vy2(i,j)*dt/dy
+  cA         = array(i,j) - array(i+1,j) + array(i,j-1) - array(i+1,j-1)
+  cB         = array(i,j) - array(i,j-1) + array(i+1,j) - array(i+1,j-1)
+  final_array(i,j) = array_prev(i+1,j-1) + array(i,j) - array(i+1,j-1) - Cx*cA - Cy*cB
+
+
+end subroutine advect_boundaries

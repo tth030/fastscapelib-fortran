@@ -65,6 +65,7 @@ LIB: $(FASTSCAPE_OBJ)
 RUNF90: LIB
 	$(F90) -O $(F90_OPTIONS) FastScape_run.f90 -o FastScape_run_f90 -L. -lFastScape $(LIB_OPTION)
 	$(F90) -O $(F90_OPTIONS) FastScape_run2.f90 -o FastScape_run2_f90 -L. -lFastScape $(LIB_OPTION)
+	$(F90) -O $(F90_OPTIONS) FastScape_run3.f90 -o FastScape_run3_f90 -L. -lFastScape $(LIB_OPTION)
 
 RUNC: LIB
 	$(CC) -O FastScape_run.c -o FastScape_run_c -L. -lFastScape -lgfortran $(LIB_OPTION)
