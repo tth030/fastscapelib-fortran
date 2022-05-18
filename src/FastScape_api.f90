@@ -252,6 +252,11 @@ subroutine FastScape_Execute_Step(ierr)
   double precision :: dtime_in, dtime_out
   double precision, dimension(:), allocatable :: h_before_sp, b_before_sp, etot_before_sp, erate_before_sp
 
+  INTEGER :: i_seed
+  INTEGER, DIMENSION(:), ALLOCATABLE :: a_seed
+  INTEGER, DIMENSION(1:8) :: dt_seed
+  double precision, dimension(:), allocatable :: h_noise
+
   ierr=0
 
   totaltime = totaltime + dt
@@ -277,8 +282,8 @@ subroutine FastScape_Execute_Step(ierr)
       !call cpu_time (time_out)
       dtime_in = omp_get_wtime()
       !call Advect_p (ierr)
-      call Advect (ierr)
-      !call Advect_laxwendroff (ierr)
+      !call Advect (ierr)
+      call Advect_laxwendroff (ierr)
       !call Advect_leapfrog (ierr)
       dtime_out = omp_get_wtime()
       timeAdvect = timeAdvect + dtime_out-dtime_in
@@ -293,7 +298,27 @@ subroutine FastScape_Execute_Step(ierr)
       timeUplift = timeUplift + dtime_out-dtime_in
     endif
   endif
-  
+ 
+  if (applyNoise) then
+    allocate(h_noise(nn))
+    ! ----- Set up random seed portably -----
+    !CALL RANDOM_SEED(size=i_seed)
+    !ALLOCATE(a_seed(1:i_seed))
+    ALLOCATE(a_seed(1:step+1))
+    CALL RANDOM_SEED(get=a_seed)
+    CALL DATE_AND_TIME(values=dt_seed)
+    !a_seed(i_seed)=dt_seed(8); a_seed(1)=dt_seed(8)*dt_seed(7)*dt_seed(6)
+    a_seed(step+1)=dt_seed(8); a_seed(1)=dt_seed(8)*dt_seed(7)*dt_seed(6)
+    CALL RANDOM_SEED(put=a_seed)
+    DEALLOCATE(a_seed)
+    !call random_seed()
+    ! ----- Done setting up random seed -----
+    call random_number (h_noise)
+    where (h>sealevel+0.125d0)  h = h + (h_noise-0.5d0)*0.25d0
+    where (h<=sealevel+0.125d0 .and. h>=sealevel) h = h + h_noise*0.125d0 
+    deallocate(h_noise)
+  endif
+ 
   if (runAdvect3d .and. runLagToEul) then
     allocate(h_before_sp(nn),b_before_sp(nn),etot_before_sp(nn),erate_before_sp(nn))
     h_before_sp     = h

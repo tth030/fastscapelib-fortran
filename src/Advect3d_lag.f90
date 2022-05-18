@@ -164,6 +164,8 @@ subroutine cloud_setup (ierr)
 
   allocate (cl%x(np),cl%y(np),cl%h(np),cl%b(np),cl%etot(np),cl%erate(np))
   allocate (cl%icx(np),cl%icy(np),cl%active(np),cl%cell(np))
+  allocate (cl%closest_node(np))
+  cl%closest_node = -1
  
   counter = 0
   do ic=1,ncell
@@ -458,6 +460,7 @@ subroutine cloud_trim (ierr)
     call array_trim(cl%icy      ,mask)
     call array_trim(cl%cell     ,mask)
     call array_trim(cl%active   ,mask)
+    call array_trim(cl%closest_node ,mask)
   
   end if !end if nout > 0
   
@@ -562,6 +565,8 @@ subroutine update_cloud (ierr)
     allocate(clinject%active(ninject))
     allocate(clinject%icy(ninject))
     allocate(clinject%icx(ninject))
+    allocate(clinject%closest_node(ninject))
+    clinject%closest_node = -1
     counter_inject       = 0
     counter_interpolated = 0
     counter_averaged     = 0
@@ -813,6 +818,7 @@ subroutine update_cloud (ierr)
     call array_trim(cl%cell                  ,not_remove)
     call array_trim(cl%active                ,not_remove)
     call array_trim(cl%icx                   ,not_remove)
+    call array_trim(cl%closest_node          ,not_remove)
   endif !endif nremove>0
   if (ninject>0) then
     call array_append(cl%x                   ,clinject%x)
@@ -825,6 +831,7 @@ subroutine update_cloud (ierr)
     call array_append(cl%cell                ,clinject%cell)
     call array_append(cl%active              ,clinject%active)
     call array_append(cl%icx                 ,clinject%icx)
+    call array_append(cl%closest_node        ,clinject%closest_node)
   endif !endif ninject>0
   !free memory
   if (ninject>0) then
@@ -838,6 +845,7 @@ subroutine update_cloud (ierr)
       deallocate(clinject%active)
       deallocate(clinject%icy)
       deallocate(clinject%icx)
+      deallocate(clinject%closest_node)
   endif !endif ninject>0
   deallocate(not_remove)
   deallocate(remove)
@@ -1373,6 +1381,7 @@ subroutine cloud_to_eul (ierr)
   counter_interpolated=0
   counter_averaged=0
   counter_closest=0
+  cl%closest_node = -1
 
   !$omp parallel do shared(nn,nx,ncell,grid,cl,rcutlim,h,b,etot,erate) private(counter,i,j,icell,distmin,nneighbours,k,ic,distmincell,ip,dist,pair,ichoice2,xcell,ycell,ichoice,xip,yip,xmin,xmax,r,ymin,ymax,s,N1,N2,N3,N4) reduction(+:counter_averaged,counter_closest,counter_interpolated)
   do counter=1,nn
@@ -1389,7 +1398,7 @@ subroutine cloud_to_eul (ierr)
       icell(4) = -1 ; icell(1) = -1
     endif
     ! select closest particules in the surrounding cells
-    distmin     = 1.d30
+!    distmin     = 1.d30
     maxelev     = -1.d30
     nneighbours = 0
     do k=1,4
@@ -1411,10 +1420,11 @@ subroutine cloud_to_eul (ierr)
         pair(nneighbours) = ichoice2
         xcell(k)          = cl%x(ichoice2)
         ycell(k)          = cl%y(ichoice2)
-        if (distmincell<distmin) then
-          distmin = distmincell
-          ichoice = ichoice2
-        endif
+        cl%closest_node(ichoice2) = counter 
+!        if (distmincell<distmin) then
+!          distmin = distmincell
+!          ichoice = ichoice2
+!        endif
       endif
     enddo
 
@@ -1506,9 +1516,14 @@ subroutine EulToLag (h_before_sp,b_before_sp,etot_before_sp,erate_before_sp,ierr
   double precision xnode1, ynode1, r, s, yip, dx, dy, xip
   !double precision ymin, ymax
   double precision N1, N2, N3, N4, VERYSMALL,dhp
-  logical DeltaOrSea
+  logical DeltaOrSea, useBilinear
+
+  !Bilinear interpolation
+  double precision deltafx,deltafy,deltafxy,deltafx_b,deltafy_b,deltafxy_b,deltafx_etot,deltafy_etot,deltafxy_etot,deltafx_erate,deltafy_erate,deltafxy_erate 
+  double precision dxx,dyy
 
   VERYSMALL = 1.d-3
+  useBilinear = .true.
 
   ierr  = 0
   ncell = (nx-1)*(ny-1)
@@ -1520,7 +1535,83 @@ subroutine EulToLag (h_before_sp,b_before_sp,etot_before_sp,erate_before_sp,ierr
   detot = etot-etot_before_sp
   derate = erate-erate_before_sp
 
-  !$omp parallel do shared(ncell,grid,cl,dh,db,detot,derate) private(ic,ip,inode1,inode2,inode3,inode4,xnode1,ynode1,i,xip,yip,r,s,N1,N2,N3,N4)
+  if (useBilinear) then
+
+  !$omp parallel do shared(ncell,grid,cl,dx,dy,dh,db,detot,derate,h,sealevel,VERYSMALL) private(ic,ip,inode1,inode2,inode3,inode4,xnode1,ynode1,deltafx,deltafy,deltafxy,deltafx_b,deltafy_b,deltafxy_b,deltafx_etot,deltafy_etot,deltafxy_etot,deltafx_erate,deltafy_erate,deltafxy_erate,i,dxx,dyy,DeltaOrSea,dhp)
+  do ic=1,ncell
+    inode1=grid%icon(1,ic)
+    inode2=grid%icon(2,ic)
+    inode3=grid%icon(3,ic)
+    inode4=grid%icon(4,ic)
+    deltafx  = dh(inode2) - dh(inode1)
+    deltafy  = dh(inode4) - dh(inode1)
+    deltafxy = dh(inode1) + dh(inode3) - dh(inode2) - dh(inode4)
+
+    deltafx_b  = db(inode2) - db(inode1)
+    deltafy_b  = db(inode4) - db(inode1)
+    deltafxy_b = db(inode1) + db(inode3) - db(inode2) - db(inode4)
+
+    deltafx_etot  = detot(inode2) - detot(inode1)
+    deltafy_etot  = detot(inode4) - detot(inode1)
+    deltafxy_etot = detot(inode1) + detot(inode3) - detot(inode2) - detot(inode4)
+ 
+    deltafx_erate  = derate(inode2) - derate(inode1)
+    deltafy_erate  = derate(inode4) - derate(inode1)
+    deltafxy_erate = derate(inode1) + derate(inode3) - derate(inode2) - derate(inode4)
+  
+    xnode1=grid%x(inode1)
+    ynode1=grid%y(inode1)
+
+    DeltaOrSea = .false.
+    if ( h(inode1) <= sealevel .or. h(inode2) <= sealevel .or. h(inode3) <= sealevel .or. h(inode4) <= sealevel ) then
+       DeltaOrSea = .true.
+    endif
+
+    do i=1,grid%nn(ic)
+       ip=grid%pair(i,ic)
+       dxx = cl%x(ip) - xnode1
+       dyy = cl%y(ip) - ynode1
+       dhp = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + dh(inode1)
+       if (DeltaOrSea) then
+         if (cl%h(ip)< sealevel .and. cl%h(ip)+dhp>sealevel) dhp = sealevel - cl%h(ip)
+         if (cl%h(ip)>=sealevel .and. dhp>0)                 dhp = 0.d0                            ! this particle close to the shoreline could be eroded or have deposition but we cannot know
+                                                                                                   ! but for sure we want to avoid to transfer sediments from offshore to onshore because of interpolation
+         if (cl%h(ip)>=sealevel .and. cl%h(ip)+dhp<sealevel) dhp = sealevel + VERYSMALL - cl%h(ip)
+       else
+         if (cl%h(ip)+dhp< sealevel) dhp = sealevel + VERYSMALL - cl%h(ip)
+       endif
+       
+       if (cl%closest_node(ip)>0) then
+         cl%h(ip)     = cl%h(ip) + dh(cl%closest_node(ip))
+         cl%b(ip)     = cl%b(ip) + db(cl%closest_node(ip))
+         cl%b(ip)     = min(cl%b(ip),cl%h(ip))
+         if (cl%h(ip)< sealevel) then
+           cl%etot(ip)  = 0.d0
+           cl%erate(ip) = 0.d0
+         else
+           cl%etot(ip)     = cl%etot(ip)  + detot(cl%closest_node(ip))
+           cl%erate(ip)    = cl%erate(ip) + derate(cl%closest_node(ip))
+         endif
+       else
+         cl%h(ip)     = cl%h(ip) + dhp
+         cl%b(ip)     = cl%b(ip) + deltafx_b*(dxx/dx) + deltafy_b*(dyy/dy) + deltafxy_b*(dxx*dyy/(dx*dy)) + db(inode1)
+         cl%b(ip)     = min(cl%b(ip),cl%h(ip))
+         if (cl%h(ip)< sealevel) then
+           cl%etot(ip)  = 0.d0
+           cl%erate(ip) = 0.d0
+         else
+           cl%etot(ip)  = cl%etot(ip)  + deltafx_etot*(dxx/dx) + deltafy_etot*(dyy/dy) + deltafxy_etot*(dxx*dyy/(dx*dy)) + detot(inode1)
+           cl%erate(ip) = cl%erate(ip) + deltafx_erate*(dxx/dx) + deltafy_erate*(dyy/dy) + deltafxy_erate*(dxx*dyy/(dx*dy)) + derate(inode1)
+         endif
+       endif !cl%closest_node(ip)>0
+    enddo
+
+  end do
+  !$omp end parallel do
+
+  else
+
+  !$omp parallel do shared(ncell,grid,cl,dx,dy,dh,db,detot,derate,h,sealevel,VERYSMALL) private(ic,ip,inode1,inode2,inode3,inode4,xnode1,ynode1,i,xip,yip,r,s,N1,N2,N3,N4,DeltaOrSea,dhp)
   do ic=1,ncell
     inode1=grid%icon(1,ic)
     inode2=grid%icon(2,ic)
@@ -1556,19 +1647,34 @@ subroutine EulToLag (h_before_sp,b_before_sp,etot_before_sp,erate_before_sp,ierr
        else
          if (cl%h(ip)+dhp< sealevel) dhp = sealevel + VERYSMALL - cl%h(ip)
        endif
-       cl%h(ip)     = cl%h(ip) + dhp
-       cl%b(ip)     = cl%b(ip)     + N1 * db(inode1)     + N2 * db(inode2)     + N3 * db(inode3)     + N4 * db(inode4)
-       cl%b(ip)     = min(cl%b(ip),cl%h(ip))
-       if (cl%h(ip)< sealevel) then
-         cl%etot(ip)  = 0.d0
-         cl%erate(ip) = 0.d0
+       if (cl%closest_node(ip)>0) then
+         cl%h(ip)     = cl%h(ip) + dh(cl%closest_node(ip))
+         cl%b(ip)     = cl%b(ip) + db(cl%closest_node(ip))
+         cl%b(ip)     = min(cl%b(ip),cl%h(ip))
+         if (cl%h(ip)< sealevel) then
+           cl%etot(ip)  = 0.d0
+           cl%erate(ip) = 0.d0
+         else
+           cl%etot(ip)     = cl%etot(ip)  + detot(cl%closest_node(ip))
+           cl%erate(ip)    = cl%erate(ip) + derate(cl%closest_node(ip))
+         endif
        else
-         cl%etot(ip)  = cl%etot(ip)  + N1 * detot(inode1)  + N2 * detot(inode2)  + N3 * detot(inode3)  + N4 * detot(inode4)
-         cl%erate(ip) = cl%erate(ip) + N1 * derate(inode1) + N2 * derate(inode2) + N3 * derate(inode3) + N4 * derate(inode4)
+         cl%h(ip)     = cl%h(ip) + dhp
+         cl%b(ip)     = cl%b(ip)     + N1 * db(inode1)     + N2 * db(inode2)     + N3 * db(inode3)     + N4 * db(inode4)
+         cl%b(ip)     = min(cl%b(ip),cl%h(ip))
+         if (cl%h(ip)< sealevel) then
+           cl%etot(ip)  = 0.d0
+           cl%erate(ip) = 0.d0
+         else
+           cl%etot(ip)  = cl%etot(ip)  + N1 * detot(inode1)  + N2 * detot(inode2)  + N3 * detot(inode3)  + N4 * detot(inode4)
+           cl%erate(ip) = cl%erate(ip) + N1 * derate(inode1) + N2 * derate(inode2) + N3 * derate(inode3) + N4 * derate(inode4)
+         endif
        endif
     end do
   end do
   !$omp end parallel do
+
+  endif
 
   deallocate(dh,db,detot,derate)
   return

@@ -16,6 +16,7 @@ integer i,j,ij
 integer ierr
 
 integer :: nx_used,ny_used,use_advection,advect_every_step
+integer :: useNoise,runSPL,runMarine,useAdvect3d_lag
 double precision :: kf1_used,kf2_used,kd1_used,kd2_used,kds1_used,kds2_used
 character(len=50) :: inputtopofile
 
@@ -32,6 +33,15 @@ read(1,*) use_advection
 read(1,*) advect_every_step
 read(1,'(a)') inputtopofile
 close(1)
+
+useAdvect3d_lag = 1
+runSPL    = 1
+runMarine = 1
+useNoise  = 1
+write(*,*) 'useAdvect3d_lag : ',useAdvect3d_lag
+write(*,*) 'useNoise  : ',useNoise
+write(*,*) 'runMarine : ',runMarine
+write(*,*) 'runSPL    : ',runSPL
 
 write(*,*) 'Input topofile is ',inputtopofile
 
@@ -72,8 +82,10 @@ kd2 = kd2_used
 g1=1.d0
 g2=1.d0
 preci_rate = 1.d0 ! precipitation rate
-call FastScape_Set_Erosional_Parameters (kf1,kf2,m,n,kd1,kd2,g1,g2,p_flow_dir_exp,ierr);FSCAPE_CHKERR_ABORT(ierr)
-!call FastScape_Set_Precipitation_Rate (preci_rate)
+if (runSPL) then
+  call FastScape_Set_Erosional_Parameters (kf1,kf2,m,n,kd1,kd2,g1,g2,p_flow_dir_exp,ierr);FSCAPE_CHKERR_ABORT(ierr)
+  !call FastScape_Set_Precipitation_Rate (preci_rate)
+endif
 sealevel = 0.d0
 !poro1 = 0.63d0
 !poro2 = 0.49d0
@@ -85,7 +97,9 @@ kds1 = kds1_used
 kds2 = kds2_used
 z1 = 2.d3
 z2 = 4.d3
-call FastScape_Set_Marine_Parameters (sealevel, poro1, poro2, z1, z2, ratio, L, kds1, kds2,ierr);FSCAPE_CHKERR_ABORT(ierr)
+if (runMarine) then
+  call FastScape_Set_Marine_Parameters (sealevel, poro1, poro2, z1, z2, ratio, L, kds1, kds2,ierr);FSCAPE_CHKERR_ABORT(ierr)
+endif
 
 call FastScape_Set_BC (1111,ierr);FSCAPE_CHKERR_ABORT(ierr)
 
@@ -186,8 +200,8 @@ if (use_advection==1) then
 !  enddo
 
   call FastScape_Set_V (ux,uy,ierr);FSCAPE_CHKERR_ABORT(ierr)
-  
-  !call FastScape_Set_RunLagToEul(.true.,ierr)
+ 
+  if (useAdvect3d_lag) call FastScape_Set_RunLagToEul(.true.,ierr)
 endif
 
 nstep=30e3
@@ -238,12 +252,14 @@ call cpu_time (time_in)
     !VTK (h,name,nf,f,fname,nx,ny,dx,dy,istep,vex)
     endif
 
-    ! apply additional noise
-    call FastScape_Copy_H (h,ierr);FSCAPE_CHKERR_ABORT(ierr)
-    call random_number (h_init)
-    where (h>sealevel+0.125d0)  h = h + (h_init-0.5d0)*0.25d0
-    where (h<=sealevel+0.125d0 .and. h>=sealevel) h = h + h_init*0.125d0
-    call FastScape_Set_H(h,ierr);FSCAPE_CHKERR_ABORT(ierr)
+    if (useNoise) then
+      ! apply additional noise
+      call FastScape_Copy_H (h,ierr);FSCAPE_CHKERR_ABORT(ierr)
+      call random_number (h_init)
+      where (h>sealevel+0.125d0)  h = h + (h_init-0.5d0)*0.25d0
+      where (h<=sealevel+0.125d0 .and. h>=sealevel) h = h + h_init*0.125d0
+      call FastScape_Set_H(h,ierr);FSCAPE_CHKERR_ABORT(ierr)
+    endif
     
   enddo
 call cpu_time (time_out)

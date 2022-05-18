@@ -43,7 +43,8 @@ close(1)
 useAdvect3d_lag = 1
 runSPL    = 1
 runMarine = 0
-useNoise  = 1
+useNoise  = 0
+write(*,*) 'useAdvect3d_lag : ',useAdvect3d_lag
 write(*,*) 'useNoise  : ',useNoise
 write(*,*) 'runMarine : ',runMarine
 write(*,*) 'runSPL    : ',runSPL
@@ -203,7 +204,7 @@ if (use_advection==1) then
   call FastScape_Set_U (u,ierr);FSCAPE_CHKERR_ABORT(ierr)
 
   ! translation toward the right
-  vel = 0.5e-2
+  vel = 0.5d-2   !0.5e-2
   uy  = 0.d0
   ux  = vel
  
@@ -261,7 +262,6 @@ if (use_advection==1) then
 
   call FastScape_Set_V (ux,uy,ierr);FSCAPE_CHKERR_ABORT(ierr)
  
-  ! if commented (off) then it uses Advect+uplift
   if (useAdvect3d_lag) call FastScape_Set_RunLagToEul(.true.,ierr)
 endif
 

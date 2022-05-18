@@ -14,6 +14,7 @@ module FastScapeContext
     double precision, dimension(:), allocatable  :: x,y,h,b,etot,erate
     integer, dimension(:), allocatable           :: icx,icy
     integer, dimension(:), allocatable           :: cell
+    integer, dimension(:), allocatable           :: closest_node
     logical, dimension(:), allocatable           :: active
     integer                                      :: npcl, nleaving
     integer, dimension(:), allocatable           :: ip_leaving
@@ -54,6 +55,7 @@ module FastScapeContext
   integer, dimension(:,:), allocatable :: don
   integer, dimension(:), allocatable :: rock_type ! 1 is basement, 2 is cont. sed, 3 is marine sed.
   logical :: runSPL, runAdvect, runAdvect3d, runDiffusion, runStrati, runUplift, runMarine, runLagToEul
+  logical :: applyNoise
   double precision :: timeSPL, timeDiffusion, timeStrati, timeUplift, timeMarine
   double precision :: timeAdvect3d, timeAdvect, timeEulToLag
   double precision, dimension(:,:), allocatable :: reflector
@@ -191,6 +193,7 @@ module FastScapeContext
     runStrati = .false.
     runMarine = .false.
     runUplift = .false.
+    applyNoise = .false.
 
     enforce_marine_no_erosion         = .false.
     enforce_marine_sed_below_sealevel = .false.
