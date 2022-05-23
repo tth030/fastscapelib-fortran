@@ -1516,14 +1516,15 @@ subroutine EulToLag (h_before_sp,b_before_sp,etot_before_sp,erate_before_sp,ierr
   double precision xnode1, ynode1, r, s, yip, dx, dy, xip
   !double precision ymin, ymax
   double precision N1, N2, N3, N4, VERYSMALL,dhp
-  logical DeltaOrSea, useBilinear
+  logical DeltaOrSea, useBilinear, useClosestNodeOption
 
   !Bilinear interpolation
   double precision deltafx,deltafy,deltafxy,deltafx_b,deltafy_b,deltafxy_b,deltafx_etot,deltafy_etot,deltafxy_etot,deltafx_erate,deltafy_erate,deltafxy_erate 
   double precision dxx,dyy
 
-  VERYSMALL = 1.d-3
-  useBilinear = .true.
+  VERYSMALL            = 1.d-3
+  useBilinear          = .true.
+  useClosestNodeOption = .false.
 
   ierr  = 0
   ncell = (nx-1)*(ny-1)
@@ -1581,7 +1582,7 @@ subroutine EulToLag (h_before_sp,b_before_sp,etot_before_sp,erate_before_sp,ierr
          if (cl%h(ip)+dhp< sealevel) dhp = sealevel + VERYSMALL - cl%h(ip)
        endif
        
-       if (cl%closest_node(ip)>0) then
+       if (cl%closest_node(ip)>0 .and. useClosestNodeOption) then
          cl%h(ip)     = cl%h(ip) + dh(cl%closest_node(ip))
          cl%b(ip)     = cl%b(ip) + db(cl%closest_node(ip))
          cl%b(ip)     = min(cl%b(ip),cl%h(ip))
@@ -1647,7 +1648,7 @@ subroutine EulToLag (h_before_sp,b_before_sp,etot_before_sp,erate_before_sp,ierr
        else
          if (cl%h(ip)+dhp< sealevel) dhp = sealevel + VERYSMALL - cl%h(ip)
        endif
-       if (cl%closest_node(ip)>0) then
+       if (cl%closest_node(ip)>0 .and. useClosestNodeOption) then
          cl%h(ip)     = cl%h(ip) + dh(cl%closest_node(ip))
          cl%b(ip)     = cl%b(ip) + db(cl%closest_node(ip))
          cl%b(ip)     = min(cl%b(ip),cl%h(ip))
