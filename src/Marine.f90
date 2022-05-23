@@ -42,9 +42,14 @@ subroutine Marine(ierr)
 
   ! computing flux from continental erosion
   flux=0.d0
+  ! decompact volume of pure solid phase (silt and sand) from onshore
+  ratio1=ratio/(1.d0-poro1)
+  ratio2=(1.d0-ratio)/(1.d0-poro2)
+  !write(*,'(a,F9.4,a,F9.4,a,F9.4,a,F9.4,a,F9.4)') 'ratio1 ',ratio1 ,'ratio2 ', ratio2, 'ratio ', ratio, 'poro1 ',poro1 ,'poro2 ', poro2
+
   where (h.gt.sealevel) flux=Sedflux
 
-  if ( .not. runSPL ) then
+  if ( runSPL ) then
     do ij=nn,1,-1
       ijk=stack(ij)
       ijr=rec(ijk)
@@ -60,8 +65,6 @@ subroutine Marine(ierr)
     !where (flux.gt.tiny(flux)) flag=1
   
     ! decompact volume of pure solid phase (silt and sand) from onshore
-    ratio1=ratio/(1.d0-poro1)
-    ratio2=(1.d0-ratio)/(1.d0-poro2)
     ! total volume of silt and sand after decompaction
     flux=flux*(ratio1+ratio2)
   
@@ -113,7 +116,7 @@ subroutine Marine(ierr)
     where (h.ge.sealevel) flux=0.d0
     flux=max(flux,0.d0)
   
-  endif
+  endif !runSPL
 
   ! silt fraction (after decompaction) in shelf
   Fs=0.d0
@@ -499,6 +502,7 @@ subroutine Marine(ierr)
   ! printing is only done if option enforce_marine_mass_cons is used.
   if (enforce_marine_mass_cons) then
      f_mass_cons = sum(dh)/(sum(flux/(ratio1+ratio2))*dt)
+     write(*,'(a,F13.4,a,F13.4,a,F13.4,a,F13.4,a,2F13.4)') 'enforce_marine_mass_cons f_mass_cons = ',f_mass_cons,' with sum(flux) = ',sum(flux),' and dt = ',dt,' and sum(dh) = ',sum(dh),' m, ratio1 ratio2 ', ratio1, ratio2
      if ((sum(flux)*dt) > 0.d0 .and. f_mass_cons > 1.0d0) then
 !         write(*,*)'Too much marine deposits with a factor f_mass_cons compared to sed flux = ',f_mass_cons
          allocate(dh_above(nn),dh_below(nn))
