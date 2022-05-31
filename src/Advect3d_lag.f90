@@ -661,13 +661,39 @@ subroutine update_cloud (ierr)
                    ic_k      = (jcell_k-1)*ncellx+icell_k
                    distmin   = 1.d30
                    if (cell_injected(ic_k)) then
-                     nntot = grid%nn(ic_k) - ninject_per_cell(ic)
+                     nntot = grid%nn(ic_k) - ninject_per_cell(ic_k)
                    else
                      nntot = grid%nn(ic_k)
                    endif
+                   if (nntot==0) then
+                     if (k==1 .or. k==4) then
+                       do while (icell_k>0 .and. nntot <= 0) 
+                         icell_k = icell_k - 1
+                         ic_k     = (jcell_k-1)*ncellx+icell_k
+                         if (cell_injected(ic_k)) then
+                           nntot = grid%nn(ic_k) - ninject_per_cell(ic_k)
+                         else
+                           nntot = grid%nn(ic_k)
+                         endif
+                       enddo
+                     endif
+                     if (k==2 .or. k==3) then
+                       do while (icell_k<=ncellx .and. nntot <= 0)
+                         icell_k = icell_k + 1
+                         ic_k     = (jcell_k-1)*ncellx+icell_k
+                         if (cell_injected(ic_k)) then
+                           nntot = grid%nn(ic_k) - ninject_per_cell(ic_k)
+                         else
+                           nntot = grid%nn(ic_k)
+                         endif
+                       enddo
+                     endif
+                   endif
+                   !write(*,'(6I10)') icell,jcell,k,ic_k, nntot,ninject_per_cell(ic_k)
                    do ip=1,nntot
                      !we cannot use new injected
                      !if (grid%pair(ip,ic_k)>0.and.grid%pair(ip,ic_k)<=cl%npcl) then
+                       !write(*,*) ip,ic_k,grid%pair(ip,ic_k)
                        dist=(clinject%x(counter_inject)-cl%x(grid%pair(ip,ic_k)))**2 + &
                             (clinject%y(counter_inject)-cl%y(grid%pair(ip,ic_k)))**2
                        if (dist<distmin) then
@@ -676,7 +702,11 @@ subroutine update_cloud (ierr)
                        end if
                      !endif
                    enddo
-                   npart = npart + 1
+                   if (nntot>0) then
+                     npart = npart + 1
+                   else
+                     write(*,'(a,I10,a,I10,a,I10,a,I10)') 'WARNING: The cell ic=',ic,' icell=',icell,' and jcell=',jcell,' did not find closest particle in quadrant ', k
+                   endif
                  endif
                enddo
              endif
@@ -708,19 +738,23 @@ subroutine update_cloud (ierr)
                 clinject%etot(counter_inject)  = 0.d0
                 clinject%erate(counter_inject) = 0.d0
                 N1 = 0.d0
-                do k=1,4
-                   if (ipart(k)>0) then
-                     clinject%h(counter_inject) = clinject%h(counter_inject) + cl%h(ipart(k))*refdist/distmin_per_quadrant(k)
-                     clinject%b(counter_inject) = clinject%b(counter_inject) + cl%b(ipart(k))*refdist/distmin_per_quadrant(k)
-                     clinject%etot(counter_inject) = clinject%etot(counter_inject) + cl%etot(ipart(k))*refdist/distmin_per_quadrant(k)
-                     clinject%erate(counter_inject) = clinject%erate(counter_inject) + cl%erate(ipart(k))*refdist/distmin_per_quadrant(k)
-                     N1 = N1 + (refdist/distmin_per_quadrant(k))
-                   endif
-                enddo
-                clinject%h(counter_inject)     = clinject%h(counter_inject)/N1
-                clinject%b(counter_inject)     = clinject%b(counter_inject)/N1
-                clinject%etot(counter_inject)  = clinject%etot(counter_inject)/N1
-                clinject%erate(counter_inject) = clinject%erate(counter_inject)/N1               
+                if (npart>0) then
+                  do k=1,4
+                     if (ipart(k)>0) then
+                       clinject%h(counter_inject) = clinject%h(counter_inject) + cl%h(ipart(k))*refdist/distmin_per_quadrant(k)
+                       clinject%b(counter_inject) = clinject%b(counter_inject) + cl%b(ipart(k))*refdist/distmin_per_quadrant(k)
+                       clinject%etot(counter_inject) = clinject%etot(counter_inject) + cl%etot(ipart(k))*refdist/distmin_per_quadrant(k)
+                       clinject%erate(counter_inject) = clinject%erate(counter_inject) + cl%erate(ipart(k))*refdist/distmin_per_quadrant(k)
+                       N1 = N1 + (refdist/distmin_per_quadrant(k))
+                     endif
+                  enddo
+                  clinject%h(counter_inject)     = clinject%h(counter_inject)/N1
+                  clinject%b(counter_inject)     = clinject%b(counter_inject)/N1
+                  clinject%etot(counter_inject)  = clinject%etot(counter_inject)/N1
+                  clinject%erate(counter_inject) = clinject%erate(counter_inject)/N1
+                else
+                  write(*,'(a,I10,a,I10,a,I10,a,I10)') 'ERROR: The cell ic=',ic,' icell=',icell,' and jcell=',jcell,' did not find any closest particle'
+                endif
  
              endif
  
@@ -1450,7 +1484,7 @@ subroutine cloud_to_eul (ierr)
         N3=0.25d0*(1.d0+r)*(1.d0+s) 
         N4=0.25d0*(1.d0-r)*(1.d0+s) 
         h(counter)     = N1 * cl%h(pair(1))     + N2 * cl%h(pair(2))     + N3 * cl%h(pair(3))     + N4 * cl%h(pair(4))
-        if (h(counter)>maxelev) then
+        if (h(counter)>maxelev+epsilon(maxelev)) then
           write(*,*) 'WARNING: something weird with shape function h(counter) > maxelev ', h(counter), maxelev
           write(*,*) '4 closest particles coordinates are :'
           do k=1,4
