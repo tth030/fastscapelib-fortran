@@ -1431,6 +1431,12 @@ subroutine cloud_to_eul (ierr)
     if (i==1) then
       icell(4) = -1 ; icell(1) = -1
     endif
+    if (j==1) then
+      icell(1) = -1 ; icell(2) = -1
+    endif
+    if (j==ny) then
+      icell(3) = -1 ; icell(4) = -1
+    endif
     ! select closest particules in the surrounding cells
 !    distmin     = 1.d30
     maxelev     = -1.d30
