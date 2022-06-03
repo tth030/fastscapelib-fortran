@@ -29,7 +29,7 @@ subroutine Marine(ierr)
   double precision Ap,Bp,Cp,Dp,Ep,Mp,Np
   !TT -------------------------------------------
 
-  if (any(h<sealevel)) then
+  if (any(h<sealevel) .and. any(h>sealevel)) then
 
   allocate (flux(nn),shelfdepth(nn),ht(nn),Fs(nn),dh(nn),dh1(nn),dh2(nn),Fmixt(nn),flag(nn))
   allocate (dhs(nn),dhs1(nn),F1(nn),F2(nn),zi(nn),zo(nn))
@@ -602,7 +602,7 @@ subroutine Marine(ierr)
 
   deallocate (flux,shelfdepth,ht,Fs,dh,dh1,dh2,Fmixt)
 
-  endif ! if seas
+  endif ! if seas and continents
 
   return
 
