@@ -17,6 +17,7 @@ integer ierr
 
 integer :: nx_used,ny_used,use_advection,advect_every_step
 integer :: useNoise,runSPL,runMarine,useAdvect3d_lag
+integer :: Enforce_Marine_Mass_cons, Enforce_Marine_No_Erosion, Enforce_Marine_Sed_Below_Sealevel
 double precision :: kf1_used,kf2_used,kd1_used,kd2_used,kds1_used,kds2_used
 character(len=50) :: inputtopofile
 
@@ -29,6 +30,9 @@ read(1,*) kd1_used
 read(1,*) kd2_used
 read(1,*) kds1_used
 read(1,*) kds2_used
+read(1,*) Enforce_Marine_Mass_cons
+read(1,*) Enforce_Marine_No_Erosion
+read(1,*) Enforce_Marine_Sed_Below_Sealevel
 read(1,*) use_advection
 read(1,*) advect_every_step
 read(1,'(a)') inputtopofile
@@ -58,9 +62,9 @@ call FastScape_Setup(ierr);FSCAPE_CHKERR_ABORT(ierr)
 !call FastScape_Use_Marine_Aggradation(.true.,ierr);FSCAPE_CHKERR_ABORT(ierr)
 !call FastScape_Set_Marine_Aggradation_rate(-0.0001d0,ierr);FSCAPE_CHKERR_ABORT(ierr)
 
-call FastScape_Set_Enforce_Marine_Mass_cons(.true.,ierr)
-call FastScape_Set_Enforce_Marine_No_Erosion(.true.,ierr)
-call FastScape_Set_Enforce_Marine_Sed_Below_Sealevel(.true.,ierr)
+if (Enforce_Marine_Mass_cons)          call FastScape_Set_Enforce_Marine_Mass_cons(.true.,ierr)
+if (Enforce_Marine_No_Erosion)         call FastScape_Set_Enforce_Marine_No_Erosion(.true.,ierr)
+if (Enforce_Marine_Sed_Below_Sealevel) call FastScape_Set_Enforce_Marine_Sed_Below_Sealevel(.true.,ierr)
 
 xl=2400.d3
 yl=1200.d3
