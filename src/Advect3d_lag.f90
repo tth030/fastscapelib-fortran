@@ -508,7 +508,7 @@ subroutine update_cloud (advect_dt,ierr)
   double precision btemp(16), etottemp(16), eratetemp(16)
   double precision N1,N2,N3,N4,r,s
   double precision xnode1,ynode1,xnode2,ynode2,xnode3,ynode3,xnode4,ynode4
-  double precision hnode1,hnode2,hnode3,hnode4
+  double precision hnode1,hnode2,hnode3,hnode4,highestnode, lowestnode
 
   ierr    = 0
 
@@ -602,15 +602,23 @@ subroutine update_cloud (advect_dt,ierr)
              xnode1=grid%x(inode1) + advect_dt*vx(inode1)
              ynode1=grid%y(inode1) + advect_dt*vy(inode1)
              hnode1=h(inode1) + advect_dt*u(inode1)
+             highestnode = hnode1
+             lowestnode  = hnode1
              xnode2=grid%x(inode2) + advect_dt*vx(inode2)
              ynode2=grid%y(inode2) + advect_dt*vy(inode2)
              hnode2=h(inode2) + advect_dt*u(inode2)
+             if (hnode2>highestnode) highestnode=hnode2
+             if (hnode2<lowestnode) lowestnode=hnode2
              xnode3=grid%x(inode3) + advect_dt*vx(inode3)
              ynode3=grid%y(inode3) + advect_dt*vy(inode3)
              hnode3=h(inode3) + advect_dt*u(inode3)
+             if (hnode3>highestnode) highestnode=hnode3
+             if (hnode3<lowestnode) lowestnode=hnode3
              xnode4=grid%x(inode4) + advect_dt*vx(inode4)
              ynode4=grid%y(inode4) + advect_dt*vy(inode4)
              hnode4=h(inode4) + advect_dt*u(inode4)
+             if (hnode4>highestnode) highestnode=hnode4
+             if (hnode4<lowestnode) lowestnode=hnode4
      
              do ii=1,ninject_per_cell(ic)
                 counter_inject             = counter_inject+1
@@ -644,6 +652,29 @@ subroutine update_cloud (advect_dt,ierr)
                 clinject%active(counter_inject) = .true.
                 clinject%icy(counter_inject)    = jcell
                 clinject%icx(counter_inject)    = icell
+
+                if (clinject%h(counter_inject)>highestnode) then
+                    !write(*,'(a,1F10.3)') 'WARNING: something weird with elevation of new injected particle above surrounding nodes ', clinject%h(counter_inject)
+                    !write(*,*) '4 cell nodes elevation are :'
+                    !write(*,'(a,1F10.3,3I10)') ' node 1 ',hnode1, ic, icell, jcell
+                    !write(*,*) ' node 2 ',hnode2
+                    !write(*,*) ' node 3 ',hnode3
+                    !write(*,*) ' node 4 ',hnode4
+                    clinject%h(counter_inject) = highestnode
+                    clinject%b(counter_inject) = min(clinject%b(counter_inject),clinject%h(counter_inject))
+                endif
+                if (clinject%h(counter_inject)<lowestnode) then
+                    !write(*,'(a,1F10.3)') 'WARNING: something weird with elevation of new injected particle below surrounding nodes ', clinject%h(counter_inject)
+                    !write(*,*) '4 cell nodes elevation are :'
+                    !write(*,'(a,1F10.3,3I10)') ' node 1 ',hnode1, ic, icell, jcell
+                    !write(*,*) ' node 2 ',hnode2
+                    !write(*,*) ' node 3 ',hnode3
+                    !write(*,*) ' node 4 ',hnode4
+                    clinject%h(counter_inject) = lowestnode
+                    clinject%b(counter_inject) = min(clinject%b(counter_inject),clinject%h(counter_inject))
+                endif
+
+
    
              enddo !ii
 
@@ -669,10 +700,33 @@ subroutine update_cloud (advect_dt,ierr)
                 cl%etot(grid%pair(k,ic))  = N1 * etot(grid%icon(1,ic))  + N2 * etot(grid%icon(2,ic))  + N3 * etot(grid%icon(3,ic))  + N4 * etot(grid%icon(4,ic))
                 cl%erate(grid%pair(k,ic)) = N1 * erate(grid%icon(1,ic)) + N2 * erate(grid%icon(2,ic)) + N3 * erate(grid%icon(3,ic)) + N4 * erate(grid%icon(4,ic))
                 cl%b(grid%pair(k,ic))     = min(cl%b(grid%pair(k,ic)),cl%h(grid%pair(k,ic)))
+                if (cl%h(grid%pair(k,ic))>highestnode) then
+                    !write(*,'(a,1F10.3)') 'WARNING: something weird with elevation update of particle above surrounding nodes ', cl%h(grid%pair(k,ic))
+                    !write(*,*) '4 cell nodes elevation are :'
+                    !write(*,'(a,1F10.3,3I10)') ' node 1 ',hnode1,ic,icell,jcell
+                    !write(*,*) ' node 2 ',hnode2
+                    !write(*,*) ' node 3 ',hnode3
+                    !write(*,*) ' node 4 ',hnode4
+                    cl%h(grid%pair(k,ic)) = highestnode
+                    cl%b(grid%pair(k,ic)) = min(cl%b(grid%pair(k,ic)),cl%h(grid%pair(k,ic)))
+                endif
+                if (cl%h(grid%pair(k,ic))<lowestnode) then
+                    !write(*,'(a,1F10.3)') 'WARNING: something weird with elevation update of particle below surrounding nodes ', cl%h(grid%pair(k,ic))
+                    !write(*,*) '4 cell nodes elevation are :'
+                    !write(*,'(a,1F10.3,3I10)') ' node 1 ',hnode1,ic,icell,jcell
+                    !write(*,*) ' node 2 ',hnode2
+                    !write(*,*) ' node 3 ',hnode3
+                    !write(*,*) ' node 4 ',hnode4
+                    cl%h(grid%pair(k,ic)) = lowestnode
+                    cl%b(grid%pair(k,ic)) = min(cl%b(grid%pair(k,ic)),cl%h(grid%pair(k,ic)))
+                endif
+
              enddo
 
           else
              ntemp = 0
+             highestnode = -9.e9
+             lowestnode  = 9.e9
              do ik=1,3
                 do jk=1,3
                     icell_k = icell + ik - 2
@@ -686,6 +740,8 @@ subroutine update_cloud (advect_dt,ierr)
                     xtemp(ntemp) = grid%x(inode1) + advect_dt*vx(inode1)
                     ytemp(ntemp) = grid%y(inode1) + advect_dt*vy(inode1)
                     htemp(ntemp) = h(inode1) + advect_dt*u(inode1)
+                    if (htemp(ntemp)>highestnode) highestnode=htemp(ntemp)
+                    if (htemp(ntemp)<lowestnode) lowestnode=htemp(ntemp)
                     btemp(ntemp) = b(inode1)
                     etottemp(ntemp)  = etot(inode1)
                     eratetemp(ntemp) = erate(inode1)
@@ -697,6 +753,8 @@ subroutine update_cloud (advect_dt,ierr)
                        xtemp(ntemp) = grid%x(inode4) + advect_dt*vx(inode4)
                        ytemp(ntemp) = grid%y(inode4) + advect_dt*vy(inode4)
                        htemp(ntemp) = h(inode4) + advect_dt*u(inode4)
+                       if (htemp(ntemp)>highestnode) highestnode=htemp(ntemp)
+                       if (htemp(ntemp)<lowestnode) lowestnode=htemp(ntemp)
                        btemp(ntemp) = b(inode4)
                        etottemp(ntemp)  = etot(inode4)
                        eratetemp(ntemp) = erate(inode4)
@@ -709,6 +767,8 @@ subroutine update_cloud (advect_dt,ierr)
                        xtemp(ntemp) = grid%x(inode2) + advect_dt*vx(inode2)
                        ytemp(ntemp) = grid%y(inode2) + advect_dt*vy(inode2)
                        htemp(ntemp) = h(inode2) + advect_dt*u(inode2) 
+                       if (htemp(ntemp)>highestnode) highestnode=htemp(ntemp)
+                       if (htemp(ntemp)<lowestnode) lowestnode=htemp(ntemp)
                        btemp(ntemp) = b(inode2)
                        etottemp(ntemp)  = etot(inode2)
                        eratetemp(ntemp) = erate(inode2)
@@ -719,6 +779,8 @@ subroutine update_cloud (advect_dt,ierr)
                           xtemp(ntemp) = grid%x(inode3) + advect_dt*vx(inode3)
                           ytemp(ntemp) = grid%y(inode3) + advect_dt*vy(inode3)
                           htemp(ntemp) = h(inode3) + advect_dt*u(inode3) 
+                          if (htemp(ntemp)>highestnode) highestnode=htemp(ntemp)
+                          if (htemp(ntemp)<lowestnode) lowestnode=htemp(ntemp)
                           btemp(ntemp) = b(inode3)
                           etottemp(ntemp)  = etot(inode3)
                           eratetemp(ntemp) = erate(inode3)
@@ -726,6 +788,9 @@ subroutine update_cloud (advect_dt,ierr)
                     endif
                 enddo
              enddo
+
+             ! not possible
+             if (ntemp>16) write(*,*) 'ERROR: ntemp is > 16 = ',ntemp
    
              do ii=1,ninject_per_cell(ic)
                 counter_inject             = counter_inject+1
@@ -748,6 +813,20 @@ subroutine update_cloud (advect_dt,ierr)
                 clinject%active(counter_inject) = .true.
                 clinject%icy(counter_inject)    = jcell
                 clinject%icx(counter_inject)    = icell
+                if (clinject%h(counter_inject)>highestnode) then
+                    !write(*,'(a,1F10.3)') 'WARNING: something weird with elevation of new injected particle above surrounding nodes (SF3)', clinject%h(counter_inject)
+                    !write(*,'(a,1F10.3,3I10)') 'highest node is  :', highestnode, ic, icell, jcell
+                    clinject%h(counter_inject)     = highestnode
+                    clinject%b(counter_inject)     = min(clinject%b(counter_inject),clinject%h(counter_inject))
+                endif
+                if (clinject%h(counter_inject)<lowestnode) then
+                    !write(*,'(a,1F10.3)') 'WARNING: something weird with elevation of new injected particle below surrounding nodes (SF3)', clinject%h(counter_inject)
+                    !write(*,'(a,1F10.3,3I10)') 'lowest node is  :', lowestnode, ic, icell, jcell
+                    clinject%h(counter_inject)     = lowestnode
+                    clinject%b(counter_inject)     = min(clinject%b(counter_inject),clinject%h(counter_inject))
+                endif
+
+
              enddo !ii
 
              !TT we smooth all particles elevation in this cell to avoid
@@ -755,12 +834,27 @@ subroutine update_cloud (advect_dt,ierr)
              do k=1,nnic
                 xip=cl%x(grid%pair(k,ic))
                 yip=cl%y(grid%pair(k,ic))
-                call compute_SF3 (ntemp,pair(1:ntemp),ntemp,xtemp,ytemp,xip,yip,rcut,Nnneighbours(1:ntemp))
-                cl%h(grid%pair(k,ic))     = dot_product(Nnneighbours(1:ntemp),htemp(1:ntemp))
-                cl%b(grid%pair(k,ic))     = dot_product(Nnneighbours(1:ntemp),btemp(1:ntemp))
-                cl%etot(grid%pair(k,ic))  = dot_product(Nnneighbours(1:ntemp),etottemp(1:ntemp))
-                cl%erate(grid%pair(k,ic)) = dot_product(Nnneighbours(1:ntemp),eratetemp(1:ntemp))
-                cl%b(grid%pair(k,ic))     = min(cl%b(grid%pair(k,ic)),cl%h(grid%pair(k,ic)))   
+                if (ntemp<=16) then
+                   call compute_SF3 (ntemp,pair(1:ntemp),ntemp,xtemp,ytemp,xip,yip,rcut,Nnneighbours(1:ntemp))
+                   cl%h(grid%pair(k,ic))     = dot_product(Nnneighbours(1:ntemp),htemp(1:ntemp))
+                   cl%b(grid%pair(k,ic))     = dot_product(Nnneighbours(1:ntemp),btemp(1:ntemp))
+                   cl%etot(grid%pair(k,ic))  = dot_product(Nnneighbours(1:ntemp),etottemp(1:ntemp))
+                   cl%erate(grid%pair(k,ic)) = dot_product(Nnneighbours(1:ntemp),eratetemp(1:ntemp))
+                   cl%b(grid%pair(k,ic))     = min(cl%b(grid%pair(k,ic)),cl%h(grid%pair(k,ic)))  
+                endif 
+                if (cl%h(grid%pair(k,ic))>highestnode) then
+                    !write(*,'(a,1F10.3)') 'WARNING: something weird with elevation update of particle above surrounding nodes (SF3)', cl%h(grid%pair(k,ic))
+                    !write(*,'(a,1F10.3,3I10)') 'highest node is  :', highestnode, ic, icell, jcell
+                    cl%h(grid%pair(k,ic))     = highestnode
+                    cl%b(grid%pair(k,ic))     = min(cl%b(grid%pair(k,ic)),cl%h(grid%pair(k,ic)))
+                endif
+                if (cl%h(grid%pair(k,ic))<lowestnode) then
+                    !write(*,'(a,1F10.3)') 'WARNING: something weird with elevation update of particle below surrounding nodes (SF3)', cl%h(grid%pair(k,ic))
+                    !write(*,'(a,1F10.3,3I10)') 'lowest node is  :', lowestnode,ic,icell,jcell
+                    cl%h(grid%pair(k,ic))     = lowestnode
+                    cl%b(grid%pair(k,ic))     = min(cl%b(grid%pair(k,ic)),cl%h(grid%pair(k,ic)))
+                endif
+
              enddo
 
           endif !boundaries, interpolation SF3 does not work there
