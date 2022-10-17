@@ -195,7 +195,8 @@ subroutine StreamPowerLaw ()
     enddo
 
     ! stores total erosion, erosion rate and flux for output
-    etot=etot+ht-h
+    where (ht-h.gt.0.d0 .and. ht > sealevel) etot=etot+ht-h ! 1- Continental deposition should not reduce previous total erosion
+                                                            ! 2- We do not track marine erosion
     erate=(ht-h)/dt
     Sedflux=ht-h
     !if (runMarine) where (h.lt.sealevel) Sedflux=0.d0
@@ -394,7 +395,8 @@ subroutine StreamPowerLaw ()
       enddo
 
       ! stores total erosion, erosion rate and flux for output
-      etot=etot+ht-h
+      where (ht-h.gt.0.d0 .and. ht > sealevel) etot=etot+ht-h ! 1- Continental deposition should not reduce previous total erosion
+                                                              ! 2- We do not track marine erosion
       erate=(ht-h)/dt
       Sedflux=ht-h
       !if (runMarine) where (h.lt.sealevel) Sedflux=0.d0

@@ -583,10 +583,10 @@ subroutine Marine(ierr)
   ! >>>>>>>> compaction ends
 
   ! update the elevation
-  etot=etot+ht-h
+  !where (ht-h.gt.0.d0) etot=etot+ht-h ! we do not track marine erosion
   erate=erate+(ht-h)/dt
   where (h.lt.sealevel) Sedflux=0.d0
-  where (h.lt.sealevel) etot=0.d0
+  !where (h.lt.sealevel) etot=0.d0 ! we do not cancel tracking of continental erosion when below sea level
   where (h.lt.sealevel) erate=0.d0
 
   ! set the silt fraction in continent
@@ -1158,7 +1158,8 @@ dh = ht-h
 
 dh_dep = dh
 
-etot=etot+ht-h
+!where (ht-h.gt.0.d0) etot=etot+ht-h ! we do not track marine erosion
+!where (h.lt.sealevel) etot=0.d0     ! we do not cancel tracking of continental erosion when below sea level
 erate=erate+(ht-h)/dt
 
 ! updates basement
