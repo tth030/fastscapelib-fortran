@@ -117,6 +117,8 @@ subroutine cloud_setup (ierr)
   integer multiplicator, ndim, mpe, ncellx, ncelly
   double precision dx, dy, dxx, dyy
   double precision deltafx, deltafy, deltafxy
+  double precision deltafx_b, deltafy_b, deltafxy_b
+  double precision deltafx_etot, deltafy_etot, deltafxy_etot
 
   ierr = 0
 
@@ -174,6 +176,15 @@ subroutine cloud_setup (ierr)
     deltafx  = h2(icx+1,icy) - h2(icx,icy)
     deltafy  = h2(icx,icy+1) - h2(icx,icy)
     deltafxy = h2(icx,icy) + h2(icx+1,icy+1) - h2(icx+1,icy) - h2(icx,icy+1)
+
+    deltafx_b  = b2(icx+1,icy) - b2(icx,icy)
+    deltafy_b  = b2(icx,icy+1) - b2(icx,icy)
+    deltafxy_b = b2(icx,icy) + b2(icx+1,icy+1) - b2(icx+1,icy) - b2(icx,icy+1)
+
+    deltafx_etot  = etot2(icx+1,icy) - etot2(icx,icy)
+    deltafy_etot  = etot2(icx,icy+1) - etot2(icx,icy)
+    deltafxy_etot = etot2(icx,icy) + etot2(icx+1,icy+1) - etot2(icx+1,icy) - etot2(icx,icy+1)
+
     do ipy=1,multiplicator+1
       do ipx=1,multiplicator+1
         counter     = counter + 1
@@ -199,7 +210,9 @@ subroutine cloud_setup (ierr)
         ! bilinear interpolation
         dxx           = cl%x(counter) - (icx-1)*dx
         dyy           = cl%y(counter) - (icy-1)*dy 
-        cl%h(counter) = deltafx*(dxx/dx) + deltafy*(dyy/dy) + deltafxy*(dxx*dyy/(dx*dy)) + h2(icx,icy) 
+        cl%h(counter)    = deltafx*(dxx/dx)      + deltafy*(dyy/dy)      + deltafxy*(dxx*dyy/(dx*dy)) + h2(icx,icy) 
+        cl%b(counter)    = deltafx_b*(dxx/dx)    + deltafy_b*(dyy/dy)    + deltafxy_b*(dxx*dyy/(dx*dy)) + b2(icx,icy) 
+        cl%etot(counter) = deltafx_etot*(dxx/dx) + deltafy_etot*(dyy/dy) + deltafxy_etot*(dxx*dyy/(dx*dy)) + etot2(icx,icy) 
 
         cl%icx(counter)  = icx 
         cl%icy(counter)  = icy
@@ -210,8 +223,8 @@ subroutine cloud_setup (ierr)
 
   cl%npcl   = counter
   cl%active = .true.
-  cl%b      = cl%h
-  cl%etot   = 0.d0
+  !cl%b      = cl%h ! not correct in case of restart
+  !cl%etot   = 0.d0
   cl%erate  = 0.d0
   
   return
@@ -264,6 +277,9 @@ subroutine advect_cloud (advect_dt,ierr)
        cl%x(ip)=cl%x(ip)+advect_dt*(N1 * vx(inode1) + N2 * vx(inode2) + N3 * vx(inode3) + N4 * vx(inode4))
        cl%y(ip)=cl%y(ip)+advect_dt*(N1 * vy(inode1) + N2 * vy(inode2) + N3 * vy(inode3) + N4 * vy(inode4))
        cl%h(ip)=cl%h(ip)+advect_dt*(N1 * u(inode1)  + N2 * u(inode2)  + N3 * u(inode3)  + N4 * u(inode4))
+
+       !Advect deep basement surface with surface velocities (not optimal but identical to other advect routines)
+       cl%b(ip)=cl%b(ip)+advect_dt*(N1 * u(inode1)  + N2 * u(inode2)  + N3 * u(inode3)  + N4 * u(inode4))
 
        if (cl%x(ip)>grid%x(grid%icon(2,ic)) .or. cl%x(ip)<grid%x(grid%icon(1,ic)) .or. &
            cl%y(ip)>grid%y(grid%icon(3,ic)) .or. cl%y(ip)<grid%y(grid%icon(1,ic)) ) then
@@ -2773,24 +2789,29 @@ subroutine EulToLag (h_before_sp,b_before_sp,etot_before_sp,erate_before_sp,ierr
          cl%h(ip)     = cl%h(ip) + dh(cl%closest_node(ip))
          cl%b(ip)     = cl%b(ip) + db(cl%closest_node(ip))
          cl%b(ip)     = min(cl%b(ip),cl%h(ip))
+         !if (cl%h(ip)< sealevel) then
+         !  !cl%etot(ip)  = 0.d0  we keep tracking total continental erosion below sea level
+         !  cl%erate(ip) = 0.d0
+         !else
+         cl%etot(ip)     = cl%etot(ip)  + detot(cl%closest_node(ip))
+         cl%erate(ip)    = cl%erate(ip) + derate(cl%closest_node(ip))
          if (cl%h(ip)< sealevel) then
-           cl%etot(ip)  = 0.d0
            cl%erate(ip) = 0.d0
-         else
-           cl%etot(ip)     = cl%etot(ip)  + detot(cl%closest_node(ip))
-           cl%erate(ip)    = cl%erate(ip) + derate(cl%closest_node(ip))
          endif
        else
          cl%h(ip)     = cl%h(ip) + dhp
          cl%b(ip)     = cl%b(ip) + deltafx_b*(dxx/dx) + deltafy_b*(dyy/dy) + deltafxy_b*(dxx*dyy/(dx*dy)) + db(inode1)
          cl%b(ip)     = min(cl%b(ip),cl%h(ip))
+         cl%etot(ip)  = cl%etot(ip)  + deltafx_etot*(dxx/dx) + deltafy_etot*(dyy/dy) + deltafxy_etot*(dxx*dyy/(dx*dy)) + detot(inode1)
+         cl%erate(ip) = cl%erate(ip) + deltafx_erate*(dxx/dx) + deltafy_erate*(dyy/dy) + deltafxy_erate*(dxx*dyy/(dx*dy)) + derate(inode1)
          if (cl%h(ip)< sealevel) then
-           cl%etot(ip)  = 0.d0
+           !cl%etot(ip)  = 0.d0 we keep tracking total continental erosion below sea level
            cl%erate(ip) = 0.d0
-         else
-           cl%etot(ip)  = cl%etot(ip)  + deltafx_etot*(dxx/dx) + deltafy_etot*(dyy/dy) + deltafxy_etot*(dxx*dyy/(dx*dy)) + detot(inode1)
-           cl%erate(ip) = cl%erate(ip) + deltafx_erate*(dxx/dx) + deltafy_erate*(dyy/dy) + deltafxy_erate*(dxx*dyy/(dx*dy)) + derate(inode1)
          endif
+         !else
+         !  cl%etot(ip)  = cl%etot(ip)  + deltafx_etot*(dxx/dx) + deltafy_etot*(dyy/dy) + deltafxy_etot*(dxx*dyy/(dx*dy)) + detot(inode1)
+         !  cl%erate(ip) = cl%erate(ip) + deltafx_erate*(dxx/dx) + deltafy_erate*(dyy/dy) + deltafxy_erate*(dxx*dyy/(dx*dy)) + derate(inode1)
+         !endif
        endif !cl%closest_node(ip)>0
     enddo
 
@@ -2839,24 +2860,30 @@ subroutine EulToLag (h_before_sp,b_before_sp,etot_before_sp,erate_before_sp,ierr
          cl%h(ip)     = cl%h(ip) + dh(cl%closest_node(ip))
          cl%b(ip)     = cl%b(ip) + db(cl%closest_node(ip))
          cl%b(ip)     = min(cl%b(ip),cl%h(ip))
+         cl%etot(ip)     = cl%etot(ip)  + detot(cl%closest_node(ip))
+         cl%erate(ip)    = cl%erate(ip) + derate(cl%closest_node(ip))
          if (cl%h(ip)< sealevel) then
-           cl%etot(ip)  = 0.d0
+         !  cl%etot(ip)  = 0.d0
            cl%erate(ip) = 0.d0
-         else
-           cl%etot(ip)     = cl%etot(ip)  + detot(cl%closest_node(ip))
-           cl%erate(ip)    = cl%erate(ip) + derate(cl%closest_node(ip))
          endif
+         !else
+         !  cl%etot(ip)     = cl%etot(ip)  + detot(cl%closest_node(ip))
+         !  cl%erate(ip)    = cl%erate(ip) + derate(cl%closest_node(ip))
+         !endif
        else
          cl%h(ip)     = cl%h(ip) + dhp
          cl%b(ip)     = cl%b(ip)     + N1 * db(inode1)     + N2 * db(inode2)     + N3 * db(inode3)     + N4 * db(inode4)
          cl%b(ip)     = min(cl%b(ip),cl%h(ip))
+         cl%etot(ip)  = cl%etot(ip)  + N1 * detot(inode1)  + N2 * detot(inode2)  + N3 * detot(inode3)  + N4 * detot(inode4)
+         cl%erate(ip) = cl%erate(ip) + N1 * derate(inode1) + N2 * derate(inode2) + N3 * derate(inode3) + N4 * derate(inode4)
          if (cl%h(ip)< sealevel) then
-           cl%etot(ip)  = 0.d0
+           !cl%etot(ip)  = 0.d0
            cl%erate(ip) = 0.d0
-         else
-           cl%etot(ip)  = cl%etot(ip)  + N1 * detot(inode1)  + N2 * detot(inode2)  + N3 * detot(inode3)  + N4 * detot(inode4)
-           cl%erate(ip) = cl%erate(ip) + N1 * derate(inode1) + N2 * derate(inode2) + N3 * derate(inode3) + N4 * derate(inode4)
          endif
+         !else
+         !  cl%etot(ip)  = cl%etot(ip)  + N1 * detot(inode1)  + N2 * detot(inode2)  + N3 * detot(inode3)  + N4 * detot(inode4)
+         !  cl%erate(ip) = cl%erate(ip) + N1 * derate(inode1) + N2 * derate(inode2) + N3 * derate(inode3) + N4 * derate(inode4)
+         !endif
        endif
     end do
   end do
