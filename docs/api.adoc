@@ -79,7 +79,7 @@ array of dimension `(nx*ny)` containing the initial topography in meters (double
 
 === FastScape_Init_F
 
-This routine is used to initialize the sand-shale ratio
+This routine is used to initialize the silt fraction
 
 Arguments:
 
@@ -87,7 +87,7 @@ Arguments:
 
 `F` ::
 
-array of dimension `(nx*ny)` containing the initial sand-shale ratio (double precision)
+array of dimension `(nx*ny)` containing the initial silt fraction (double precision)
 
 
 === FastScape_Set_Erosional_Parameters
@@ -175,35 +175,35 @@ sea level in meters (double precision)
 
 `p1`::
 
-reference/surface porosity for sand (double precision)
+reference/surface porosity for silt (double precision)
 
 `p2`::
 
-reference/surface porosity for shale (double precision)
+reference/surface porosity for sand (double precision)
 
 `z1`::
 
-e-folding depth for exponential porosity law for sand (double precision)
+e-folding depth for exponential porosity law for silt (double precision)
 
 `z2`::
 
-e-folding depth for exponential porosity law for shale (double precision)
+e-folding depth for exponential porosity law for sand (double precision)
 
 `r` ::
 
-sand-shale ratio for material leaving the continent (double precision)
+silt fraction for material leaving the continent (double precision)
 
 `L` ::
 
-averaging depth/thickness needed to solve the sand-shale equation in meters (double precision)
+averaging depth/thickness needed to solve the silt-sand equation in meters (double precision)
 
 `kds1` ::
 
-marine transport coefficient (diffusivity) for sand in meters squared per year (double precision)
+marine transport coefficient (diffusivity) for silt in meters squared per year (double precision)
 
 `kds2` ::
 
-marine transport coefficient (diffusivity) for shale in meters squared per year (double precision)
+marine transport coefficient (diffusivity) for sand in meters squared per year (double precision)
 
 [WARNING]
 ====
@@ -341,6 +341,38 @@ Arguments:
 
 array of dimension `(nx*ny)` containing the topographic increment in meters to be added to the topography `h`, the basement `b` and the stratigraphic horizons created when the **Stratigraphy** option has been turned on by calling the `FastScape_Strati` routine (double precision)
 
+=== FastScape_Set_Tolerance
+
+This routine can be used to set the convergence parameters for the Gauss-Seidel iterations performed while numerically solving the Stream Power law.
+
+Arguments:
+
+`FastScape_Set_Tolerance ( tol_relp, tol_absp, nGSStreamPowerLawMaxp)`
+
+`tol_relp` ::
+
+relative tolerance (applied to the current max. topographic elevation)
+
+`tol_absp` ::
+
+absolute tolerance
+
+`nGSStreamPowerLawMaxp` ::
+
+maximum number of Gauss-Seidel iterations
+
+=== FastScape_Get_GSSIterations
+
+This routine is used to get the actual number of Gauss-Seidel iterations performed while numerically solving the Stream Power law during the last time step.
+
+Arguments:
+
+`FastScape_Get_GSSIterations ( nGSSp)`
+
+`nGSSp` ::
+
+number of Gauss-Seidel iterations
+
 === FastScape_Copy_H
 
 This routine is used to extract from the model the current topography in meters
@@ -355,7 +387,7 @@ array of dimension `(nx*ny)` containing the extracted topography in meters (doub
 
 === FastScape_Copy_F
 
-This routine is used to extract from the model the current sand-shale ratio
+This routine is used to extract from the model the current silt fraction
 
 Arguments:
 
@@ -363,7 +395,7 @@ Arguments:
 
 `F` ::
 
-array of dimension `(nx*ny)` containing the extracted sand-shale ratio (double precision)
+array of dimension `(nx*ny)` containing the extracted silt fraction (double precision)
 
 === FastScape_Copy_Basement
 
@@ -607,7 +639,7 @@ What is stored on each horizon:
 |5|DepositionalBathymetry|Bathymetry at time of deposition in meters
 |6|DepositionalSlope| Slope at time of depostion in degrees
 |7|DistanceToSHore| Distance to shore at time of deposition in meters
-|8|Sand/ShaleRatio|Sand to shale ratio at time of deposition
+|8|Sand/ShaleRatio|Silt fraction at time of deposition
 |9|HorizonAge|Age of the current horizon in years
 |A|ThicknessErodedBelow|Sediment thickness eroded below current horizon in meters
 |===
