@@ -73,42 +73,44 @@ module FastScapeContext
   type (cloud)     :: cl
   type (FEgrid)    :: grid
 
-  interface array_append
-     subroutine array_append_dp(a,a_append)
+  ! == array_append (to avoid multiple definition with fantom)
+  interface array_affix
+     subroutine array_affix_dp(a,a_append)
      implicit none
      double precision,allocatable,dimension(:):: a,a_append
-     end subroutine array_append_dp
+     end subroutine array_affix_dp
      
-     subroutine array_append_i(a,a_append)
+     subroutine array_affix_i(a,a_append)
      implicit none
      integer,allocatable,dimension(:):: a,a_append
-     end subroutine array_append_i
+     end subroutine array_affix_i
 
-     subroutine array_append_b(a,a_append)
+     subroutine array_affix_b(a,a_append)
      implicit none
      logical,allocatable,dimension(:):: a,a_append
-     end subroutine array_append_b
-  end interface array_append
+     end subroutine array_affix_b
+  end interface array_affix
 
-  interface array_trim
-     subroutine array_trim_dp(array,mask)
+  ! == array_trim ( to avoid multiple definition with fantom)
+  interface array_cut
+     subroutine array_cut_dp(array,mask)
        implicit none
        double precision,allocatable :: array(:)
        logical :: mask(:)
-     end subroutine array_trim_dp
+     end subroutine array_cut_dp
    
-     subroutine array_trim_i(array,mask)
+     subroutine array_cut_i(array,mask)
        implicit none
        integer,allocatable :: array(:)
        logical :: mask(:)
-     end subroutine array_trim_i
+     end subroutine array_cut_i
 
-     subroutine array_trim_b(array,mask)
+     subroutine array_cut_b(array,mask)
        implicit none
        logical, allocatable :: array(:)
        logical :: mask(:)
-     end subroutine array_trim_b
-  end interface array_trim
+     end subroutine array_cut_b
+  end interface array_cut
 
   contains
 
@@ -1301,7 +1303,7 @@ module FastScapeContext
 
     !this subroutine is a wrapper of a=[a,b], dealing with allocation etc.
     !For some new compilers, the matlab-like syntax a=[a,b] can be directly used.
-    subroutine array_append_dp(a,a_append)
+    subroutine array_affix_dp(a,a_append)
       implicit none
       double precision,allocatable,dimension(:):: a,a_append
       double precision,allocatable,dimension(:):: a_new
@@ -1325,11 +1327,11 @@ module FastScapeContext
       a = a_new
       
       deallocate(a_new)
-    end subroutine array_append_dp
+    end subroutine array_affix_dp
 
     !---------------------------------------------------------------
     
-    subroutine array_append_i(a,a_append)
+    subroutine array_affix_i(a,a_append)
       implicit none
       integer,allocatable,dimension(:):: a,a_append
       integer,allocatable,dimension(:):: a_new
@@ -1352,11 +1354,11 @@ module FastScapeContext
       a = a_new
       
       deallocate(a_new)
-    end subroutine array_append_i
+    end subroutine array_affix_i
 
     !---------------------------------------------------------------
     
-    subroutine array_append_b(a,a_append)
+    subroutine array_affix_b(a,a_append)
       implicit none
       logical,allocatable,dimension(:):: a,a_append
       logical,allocatable,dimension(:):: a_new
@@ -1379,11 +1381,11 @@ module FastScapeContext
       a = a_new
       
       deallocate(a_new)
-    end subroutine array_append_b
+    end subroutine array_affix_b
 
     !---------------------------------------------------------------
 
-    subroutine array_trim_dp(array,mask)
+    subroutine array_cut_dp(array,mask)
       implicit none
       double precision,allocatable :: array(:)
       logical :: mask(:)
@@ -1410,9 +1412,9 @@ module FastScapeContext
     
       deallocate(swap)
     
-    end subroutine array_trim_dp
+    end subroutine array_cut_dp
   
-    subroutine array_trim_i(array,mask)
+    subroutine array_cut_i(array,mask)
       implicit none
       integer,allocatable :: array(:)
       logical :: mask(:)
@@ -1439,9 +1441,9 @@ module FastScapeContext
     
       deallocate(swap)
     
-    end subroutine array_trim_i
+    end subroutine array_cut_i
   
-    subroutine array_trim_b(array,mask)
+    subroutine array_cut_b(array,mask)
       implicit none
       logical, allocatable :: array(:)
       logical :: mask(:)
@@ -1468,5 +1470,5 @@ module FastScapeContext
     
       deallocate(swap)
     
-    end subroutine array_trim_b
+    end subroutine array_cut_b
     

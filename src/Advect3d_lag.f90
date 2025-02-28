@@ -397,48 +397,48 @@ end subroutine locate_cloud
 
 !--------------------------------------------------------------------------
 
-subroutine search_cell2D (np,partx,party,cellid,icelly,valid,ierr)
-
-  use FastScapeContext
-
-  implicit none
-
-  integer                        :: np
-  double precision,dimension(np) :: partx,party
-  integer,dimension(np)          :: cellid,icelly
-  logical,dimension(np)          :: valid
-  integer, intent(out) :: ierr
-
-  integer ip,icx,icy,ic,ncellx, ncelly
-  double precision dx, dy
-
-  ierr   = 0
-  dx     = xl/(nx-1)
-  dy     = yl/(ny-1)
-  ncellx = nx-1
-  ncelly = ny-1
-
-  !$omp parallel do shared(np,partx,party,dx,dy,ncellx,ncelly,valid,icelly,cellid) private(ip,icx,icy,ic)
-  do ip=1,np
-    icx=floor(partx(ip)/dx)+1
-    icy=floor(party(ip)/dy)+1
-
-    if (icx>ncellx .or. icx<1 .or. icy>ncelly .or. icy<1) then
-      valid(ip) = .false.
-      cycle
-    endif
-
-    ic = icx + (icy-1)*ncellx
-
-    icelly(ip) = icy
-    cellid(ip) = ic
-  end do
-  !$omp end parallel do
-
-  return
-
-end subroutine search_cell2D
-
+!subroutine search_cell2D (np,partx,party,cellid,icelly,valid,ierr)
+!
+!  use FastScapeContext
+!
+!  implicit none
+!
+!  integer                        :: np
+!  double precision,dimension(np) :: partx,party
+!  integer,dimension(np)          :: cellid,icelly
+!  logical,dimension(np)          :: valid
+!  integer, intent(out) :: ierr
+!
+!  integer ip,icx,icy,ic,ncellx, ncelly
+!  double precision dx, dy
+!
+!  ierr   = 0
+!  dx     = xl/(nx-1)
+!  dy     = yl/(ny-1)
+!  ncellx = nx-1
+!  ncelly = ny-1
+!
+!  !$omp parallel do shared(np,partx,party,dx,dy,ncellx,ncelly,valid,icelly,cellid) private(ip,icx,icy,ic)
+!  do ip=1,np
+!    icx=floor(partx(ip)/dx)+1
+!    icy=floor(party(ip)/dy)+1
+!
+!    if (icx>ncellx .or. icx<1 .or. icy>ncelly .or. icy<1) then
+!      valid(ip) = .false.
+!      cycle
+!    endif
+!
+!    ic = icx + (icy-1)*ncellx
+!
+!    icelly(ip) = icy
+!    cellid(ip) = ic
+!  end do
+!  !$omp end parallel do
+!
+!  return
+!
+!end subroutine search_cell2D
+!
 !--------------------------------------------------------------------------
 
 subroutine cloud_trim (ierr)
@@ -466,17 +466,17 @@ subroutine cloud_trim (ierr)
     allocate(mask(cl%npcl))
     mask = cl%active
   
-    call array_trim(cl%x        ,mask)
-    call array_trim(cl%y        ,mask)
-    call array_trim(cl%h        ,mask)
-    call array_trim(cl%b        ,mask)
-    call array_trim(cl%etot     ,mask)
-    call array_trim(cl%erate    ,mask)
-    call array_trim(cl%icx      ,mask)
-    call array_trim(cl%icy      ,mask)
-    call array_trim(cl%cell     ,mask)
-    call array_trim(cl%active   ,mask)
-    call array_trim(cl%closest_node ,mask)
+    call array_cut(cl%x        ,mask)
+    call array_cut(cl%y        ,mask)
+    call array_cut(cl%h        ,mask)
+    call array_cut(cl%b        ,mask)
+    call array_cut(cl%etot     ,mask)
+    call array_cut(cl%erate    ,mask)
+    call array_cut(cl%icx      ,mask)
+    call array_cut(cl%icy      ,mask)
+    call array_cut(cl%cell     ,mask)
+    call array_cut(cl%active   ,mask)
+    call array_cut(cl%closest_node ,mask)
   
   end if !end if nout > 0
   
@@ -952,30 +952,30 @@ subroutine update_cloud (advect_dt,ierr)
 
   !update arrays ---------------------------------------------------------------------------
   if (nremove>0) then
-    call array_trim(cl%x                     ,not_remove)
-    call array_trim(cl%y                     ,not_remove)
-    call array_trim(cl%h                     ,not_remove)
-    call array_trim(cl%b                     ,not_remove)
-    call array_trim(cl%etot                  ,not_remove)
-    call array_trim(cl%erate                 ,not_remove)
-    call array_trim(cl%icy                   ,not_remove)
-    call array_trim(cl%cell                  ,not_remove)
-    call array_trim(cl%active                ,not_remove)
-    call array_trim(cl%icx                   ,not_remove)
-    call array_trim(cl%closest_node          ,not_remove)
+    call array_cut(cl%x                     ,not_remove)
+    call array_cut(cl%y                     ,not_remove)
+    call array_cut(cl%h                     ,not_remove)
+    call array_cut(cl%b                     ,not_remove)
+    call array_cut(cl%etot                  ,not_remove)
+    call array_cut(cl%erate                 ,not_remove)
+    call array_cut(cl%icy                   ,not_remove)
+    call array_cut(cl%cell                  ,not_remove)
+    call array_cut(cl%active                ,not_remove)
+    call array_cut(cl%icx                   ,not_remove)
+    call array_cut(cl%closest_node          ,not_remove)
   endif !endif nremove>0
   if (ninject>0) then
-    call array_append(cl%x                   ,clinject%x)
-    call array_append(cl%y                   ,clinject%y)
-    call array_append(cl%h                   ,clinject%h)
-    call array_append(cl%b                   ,clinject%b)
-    call array_append(cl%etot                ,clinject%etot)
-    call array_append(cl%erate               ,clinject%erate)
-    call array_append(cl%icy                 ,clinject%icy)
-    call array_append(cl%cell                ,clinject%cell)
-    call array_append(cl%active              ,clinject%active)
-    call array_append(cl%icx                 ,clinject%icx)
-    call array_append(cl%closest_node        ,clinject%closest_node)
+    call array_affix(cl%x                   ,clinject%x)
+    call array_affix(cl%y                   ,clinject%y)
+    call array_affix(cl%h                   ,clinject%h)
+    call array_affix(cl%b                   ,clinject%b)
+    call array_affix(cl%etot                ,clinject%etot)
+    call array_affix(cl%erate               ,clinject%erate)
+    call array_affix(cl%icy                 ,clinject%icy)
+    call array_affix(cl%cell                ,clinject%cell)
+    call array_affix(cl%active              ,clinject%active)
+    call array_affix(cl%icx                 ,clinject%icx)
+    call array_affix(cl%closest_node        ,clinject%closest_node)
   endif !endif ninject>0
   !free memory
   if (ninject>0) then
@@ -1484,30 +1484,30 @@ subroutine update_cloud_v3 (advect_dt,ierr)
 
   !update arrays ---------------------------------------------------------------------------
   if (nremove>0) then
-    call array_trim(cl%x                     ,not_remove)
-    call array_trim(cl%y                     ,not_remove)
-    call array_trim(cl%h                     ,not_remove)
-    call array_trim(cl%b                     ,not_remove)
-    call array_trim(cl%etot                  ,not_remove)
-    call array_trim(cl%erate                 ,not_remove)
-    call array_trim(cl%icy                   ,not_remove)
-    call array_trim(cl%cell                  ,not_remove)
-    call array_trim(cl%active                ,not_remove)
-    call array_trim(cl%icx                   ,not_remove)
-    call array_trim(cl%closest_node          ,not_remove)
+    call array_cut(cl%x                     ,not_remove)
+    call array_cut(cl%y                     ,not_remove)
+    call array_cut(cl%h                     ,not_remove)
+    call array_cut(cl%b                     ,not_remove)
+    call array_cut(cl%etot                  ,not_remove)
+    call array_cut(cl%erate                 ,not_remove)
+    call array_cut(cl%icy                   ,not_remove)
+    call array_cut(cl%cell                  ,not_remove)
+    call array_cut(cl%active                ,not_remove)
+    call array_cut(cl%icx                   ,not_remove)
+    call array_cut(cl%closest_node          ,not_remove)
   endif !endif nremove>0
   if (ninject>0) then
-    call array_append(cl%x                   ,clinject%x)
-    call array_append(cl%y                   ,clinject%y)
-    call array_append(cl%h                   ,clinject%h)
-    call array_append(cl%b                   ,clinject%b)
-    call array_append(cl%etot                ,clinject%etot)
-    call array_append(cl%erate               ,clinject%erate)
-    call array_append(cl%icy                 ,clinject%icy)
-    call array_append(cl%cell                ,clinject%cell)
-    call array_append(cl%active              ,clinject%active)
-    call array_append(cl%icx                 ,clinject%icx)
-    call array_append(cl%closest_node        ,clinject%closest_node)
+    call array_affix(cl%x                   ,clinject%x)
+    call array_affix(cl%y                   ,clinject%y)
+    call array_affix(cl%h                   ,clinject%h)
+    call array_affix(cl%b                   ,clinject%b)
+    call array_affix(cl%etot                ,clinject%etot)
+    call array_affix(cl%erate               ,clinject%erate)
+    call array_affix(cl%icy                 ,clinject%icy)
+    call array_affix(cl%cell                ,clinject%cell)
+    call array_affix(cl%active              ,clinject%active)
+    call array_affix(cl%icx                 ,clinject%icx)
+    call array_affix(cl%closest_node        ,clinject%closest_node)
   endif !endif ninject>0
   !free memory
   if (ninject>0) then
@@ -2005,30 +2005,30 @@ subroutine update_cloud_v2 (ierr)
 
   !update arrays ---------------------------------------------------------------------------
   if (nremove>0) then
-    call array_trim(cl%x                     ,not_remove)
-    call array_trim(cl%y                     ,not_remove)
-    call array_trim(cl%h                     ,not_remove)
-    call array_trim(cl%b                     ,not_remove)
-    call array_trim(cl%etot                  ,not_remove)
-    call array_trim(cl%erate                 ,not_remove)
-    call array_trim(cl%icy                   ,not_remove)
-    call array_trim(cl%cell                  ,not_remove)
-    call array_trim(cl%active                ,not_remove)
-    call array_trim(cl%icx                   ,not_remove)
-    call array_trim(cl%closest_node          ,not_remove)
+    call array_cut(cl%x                     ,not_remove)
+    call array_cut(cl%y                     ,not_remove)
+    call array_cut(cl%h                     ,not_remove)
+    call array_cut(cl%b                     ,not_remove)
+    call array_cut(cl%etot                  ,not_remove)
+    call array_cut(cl%erate                 ,not_remove)
+    call array_cut(cl%icy                   ,not_remove)
+    call array_cut(cl%cell                  ,not_remove)
+    call array_cut(cl%active                ,not_remove)
+    call array_cut(cl%icx                   ,not_remove)
+    call array_cut(cl%closest_node          ,not_remove)
   endif !endif nremove>0
   if (ninject>0) then
-    call array_append(cl%x                   ,clinject%x)
-    call array_append(cl%y                   ,clinject%y)
-    call array_append(cl%h                   ,clinject%h)
-    call array_append(cl%b                   ,clinject%b)
-    call array_append(cl%etot                ,clinject%etot)
-    call array_append(cl%erate               ,clinject%erate)
-    call array_append(cl%icy                 ,clinject%icy)
-    call array_append(cl%cell                ,clinject%cell)
-    call array_append(cl%active              ,clinject%active)
-    call array_append(cl%icx                 ,clinject%icx)
-    call array_append(cl%closest_node        ,clinject%closest_node)
+    call array_affix(cl%x                   ,clinject%x)
+    call array_affix(cl%y                   ,clinject%y)
+    call array_affix(cl%h                   ,clinject%h)
+    call array_affix(cl%b                   ,clinject%b)
+    call array_affix(cl%etot                ,clinject%etot)
+    call array_affix(cl%erate               ,clinject%erate)
+    call array_affix(cl%icy                 ,clinject%icy)
+    call array_affix(cl%cell                ,clinject%cell)
+    call array_affix(cl%active              ,clinject%active)
+    call array_affix(cl%icx                 ,clinject%icx)
+    call array_affix(cl%closest_node        ,clinject%closest_node)
   endif !endif ninject>0
   !free memory
   if (ninject>0) then
@@ -2505,28 +2505,28 @@ subroutine update_cloud_v1 (ierr)
 
   !update arrays ---------------------------------------------------------------------------
   if (nremove>0) then
-    call array_trim(cl%x                     ,not_remove)
-    call array_trim(cl%y                     ,not_remove)
-    call array_trim(cl%h                     ,not_remove)
-    call array_trim(cl%b                     ,not_remove)
-    call array_trim(cl%etot                  ,not_remove)
-    call array_trim(cl%erate                 ,not_remove)
-    call array_trim(cl%icy                   ,not_remove)
-    call array_trim(cl%cell                  ,not_remove)
-    call array_trim(cl%active                ,not_remove)
-    call array_trim(cl%icx                   ,not_remove)
+    call array_cut(cl%x                     ,not_remove)
+    call array_cut(cl%y                     ,not_remove)
+    call array_cut(cl%h                     ,not_remove)
+    call array_cut(cl%b                     ,not_remove)
+    call array_cut(cl%etot                  ,not_remove)
+    call array_cut(cl%erate                 ,not_remove)
+    call array_cut(cl%icy                   ,not_remove)
+    call array_cut(cl%cell                  ,not_remove)
+    call array_cut(cl%active                ,not_remove)
+    call array_cut(cl%icx                   ,not_remove)
   endif !endif nremove>0
   if (ninject>0) then
-    call array_append(cl%x                   ,clinject%x)
-    call array_append(cl%y                   ,clinject%y)
-    call array_append(cl%h                   ,clinject%h)
-    call array_append(cl%b                   ,clinject%b)
-    call array_append(cl%etot                ,clinject%etot)
-    call array_append(cl%erate               ,clinject%erate)
-    call array_append(cl%icy                 ,clinject%icy)
-    call array_append(cl%cell                ,clinject%cell)
-    call array_append(cl%active              ,clinject%active)
-    call array_append(cl%icx                 ,clinject%icx)
+    call array_affix(cl%x                   ,clinject%x)
+    call array_affix(cl%y                   ,clinject%y)
+    call array_affix(cl%h                   ,clinject%h)
+    call array_affix(cl%b                   ,clinject%b)
+    call array_affix(cl%etot                ,clinject%etot)
+    call array_affix(cl%erate               ,clinject%erate)
+    call array_affix(cl%icy                 ,clinject%icy)
+    call array_affix(cl%cell                ,clinject%cell)
+    call array_affix(cl%active              ,clinject%active)
+    call array_affix(cl%icx                 ,clinject%icx)
   endif !endif ninject>0
   !free memory
   if (ninject>0) then
